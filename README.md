@@ -12,3 +12,10 @@ MIT licensed.
 Trainer recipes: the Route tab can include recipes you still have to learn, using Forever trainer data
 from Efficient Games' EG Link output (CC BY 4.0, see THIRD_PARTY.md). Coverage is partial: only trainers
 players have opened are listed. Toggle it with the "Trainer recipes" button on the Route tab.
+
+Recipes taught by items (patterns, plans, recipes): when Polestar is installed, Margin reads its Codex to find
+which item teaches each craft and the skill it needs, prices that item from the AH (or an open vendor), and lets
+the route include it. Without Polestar those recipes are simply not considered. The AH button also searches for
+those pattern items so they get priced.
+
+AH purchases are credited when the AH confirms them, so shopping-list items are ticked off before the mail arrives.
