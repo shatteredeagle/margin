@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- The profession-window Margin button now shows at a default spot even if looking for a better one fails.
+
 ## 0.1.2-alpha
 
 - **Fixed: the vendor popup never opened in 0.1.1-alpha** (two helper functions were lost while adding the Sell tab). The profession-window Margin button also failed while looking for a free spot; fixed.

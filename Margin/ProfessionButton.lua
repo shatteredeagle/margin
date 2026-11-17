@@ -119,10 +119,17 @@ local function ensure()
   end
   button:SetParent(parent)
   button:SetFrameLevel(parent:GetFrameLevel() + 20)
+  -- visible at a sensible default first, so a problem while looking for a better spot cannot hide it
+  button:ClearAllPoints()
+  button:SetPoint("BOTTOMRIGHT", parent, "TOPRIGHT", -6, 1)
   button:Show()
-  place()
+  local function safePlace()
+    local ok, err = pcall(place)
+    if not ok and MarginDB and MarginDB.debug then ns.Print("[btn] placement failed:", tostring(err)) end
+  end
+  safePlace()
   -- other addons build their controls a moment after the window opens: look again
-  C_Timer.After(0.5, place)
+  C_Timer.After(0.5, safePlace)
 end
 
 local f = CreateFrame("Frame")
