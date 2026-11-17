@@ -15,7 +15,7 @@ assert(v == 300 and a == 950)
 local rows = ns.Evaluate({ recipes = { recipe, { out = 9, qty = 1, diff = 3, ups = 1, reagents = { {item = 3, count = 1} } } } })
 assert(rows[1].vendorProfit == 160 and rows[1].ahProfit == 810)
 assert(rows[2].missing == 1)
-assert(#ns.ProfitRows(rows, "vendor") == 2)
+assert(#ns.ProfitRows(rows, "vendor") == 2 and #ns.ProfitRows(rows, "vendor", true) == 2)
 local lv = ns.LevelingRows(rows)
 assert(lv[1].perUp == 140)
 

@@ -78,15 +78,15 @@ function ns.Evaluate(prof, profs)
   return rows
 end
 
--- Fully priced profitable recipes first (best profit first), then every
--- recipe that lacks a price, so an empty price database is visible, not blank.
-function ns.ProfitRows(rows, key)
+-- Priced recipes best profit first, then unpriced ones. showAll keeps the
+-- unprofitable priced recipes too (they sort between the two groups).
+function ns.ProfitRows(rows, key, showAll)
   local out, unpriced = {}, {}
   local field = key == "ah" and "ahProfit" or "vendorProfit"
   for _, row in ipairs(rows) do
     if row.missing > 0 or row[field] == nil then
       unpriced[#unpriced + 1] = row
-    elseif row[field] > 0 then
+    elseif showAll or row[field] > 0 then
       out[#out + 1] = row
     end
   end
@@ -95,15 +95,21 @@ function ns.ProfitRows(rows, key)
   return out, field
 end
 
--- Cheapest skill-ups first; unpriced recipes that can still skill up follow.
-function ns.LevelingRows(rows)
-  local out, unpriced = {}, {}
+-- Cheapest skill-ups first, then (showAll) grey recipes by cost, then unpriced.
+function ns.LevelingRows(rows, showAll)
+  local ups, grey, unpriced = {}, {}, {}
   for _, row in ipairs(rows) do
-    if row.chance > 0 then
-      if row.missing == 0 then out[#out + 1] = row else unpriced[#unpriced + 1] = row end
+    if row.missing > 0 then
+      if showAll or row.chance > 0 then unpriced[#unpriced + 1] = row end
+    elseif row.chance > 0 then
+      ups[#ups + 1] = row
+    elseif showAll then
+      grey[#grey + 1] = row
     end
   end
-  table.sort(out, function(a, b) return a.perUp < b.perUp end)
-  for _, row in ipairs(unpriced) do out[#out + 1] = row end
-  return out
+  table.sort(ups, function(a, b) return a.perUp < b.perUp end)
+  table.sort(grey, function(a, b) return a.cost < b.cost end)
+  for _, row in ipairs(grey) do ups[#ups + 1] = row end
+  for _, row in ipairs(unpriced) do ups[#ups + 1] = row end
+  return ups
 end

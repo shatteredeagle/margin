@@ -4,6 +4,7 @@ ns.defaults = {
   ahCut = 0.05,       -- fraction the AH keeps when a sale completes
   minAge = nil,       -- reserved: max Auctionator data age in days
   sortKey = "vendor", -- "vendor" or "ah"
+  showAll = true,     -- list unprofitable / grey recipes too
 }
 
 local function chardb()
