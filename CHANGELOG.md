@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.1.2-alpha
+
+- **Fixed: the vendor popup never opened in 0.1.1-alpha** (two helper functions were lost while adding the Sell tab). The profession-window Margin button also failed while looking for a free spot; fixed.
 
 - CI now fails when the addon uses a function name that is never defined (the check that would have caught the vendor popup bug below). New WoW API names go in `tests/allowed_globals.txt`.
 
