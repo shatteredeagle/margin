@@ -233,6 +233,10 @@ function ns.RefreshUI()
   frame.tSort:SetText(key == "ah" and "Sell: AH" or "Sell: vendor")
   frame.tAll:SetText(showAll and "Show: everything" or "Show: useful only")
   frame.tAll:SetEnabled(tab ~= "route")
+  local count = 0
+  for _ in pairs(profs) do count = count + 1 end
+  frame.tProf:SetText(profName or "Profession")
+  frame.tProf:SetEnabled(count > 1)
   local h = HEADERS[tab]
   frame.hdr[1]:SetText(h[1])
   frame.hdr[2]:SetText(h[2])
