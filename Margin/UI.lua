@@ -6,11 +6,18 @@ local offset, total = 0, 0
 
 local DIFF_COLOR = { [0] = "ff8040", [1] = "ffff00", [2] = "40c040", [3] = "909090" }
 
+-- Own formatter: GetCoinTextureString is not available on Forever.
 local function money(c)
   if c == nil then return "?" end
   local neg = c < 0
-  local s = GetCoinTextureString(math.floor(math.abs(c)))
-  return neg and ("|cffff6060-" .. s .. "|r") or s
+  c = math.floor(math.abs(c) + 0.5)
+  local g, sv, cp = math.floor(c / 10000), math.floor(c / 100) % 100, c % 100
+  local parts = {}
+  if g > 0 then parts[#parts + 1] = g .. "|cffffd700g|r" end
+  if g > 0 or sv > 0 then parts[#parts + 1] = sv .. "|cffc0c0c0s|r" end
+  parts[#parts + 1] = cp .. "|cffeda55fc|r"
+  local out = table.concat(parts, " ")
+  return neg and ("|cffff6060-|r" .. out) or out
 end
 
 local function setOffset(v)
