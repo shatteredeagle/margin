@@ -268,10 +268,19 @@ local function recipeEntry(d, kind, key)
   return e
 end
 
-local function routeEntries(prof)
+-- The route for the profession the window shows: plan, prof, name, target (nil when nothing is scanned).
+function ns.CurrentPlan()
+  local profs = ns.Char().profs
+  local name, prof = profName, profName and profs[profName]
+  if not prof then name, prof = next(profs) end
+  if not prof then return nil end
   local target = ns.Opt("routeTarget") or prof.max
   target = math.min(math.max(target, prof.skill + 1), prof.max)
-  local plan = ns.Plan(prof, target, nil, ns.Opt("useTrainer"))
+  return ns.Plan(prof, target, nil, ns.Opt("useTrainer")), prof, name, target
+end
+
+local function routeEntries(prof)
+  local plan, _, _, target = ns.CurrentPlan()
   local list = {}
   for _, seg in ipairs(plan.segs) do
     if seg.gap then
@@ -316,6 +325,7 @@ local function routeEntries(prof)
 end
 
 function ns.RefreshUI()
+  if ns.RefreshShopping then ns.RefreshShopping() end
   if not frame or not frame:IsShown() then return end
   local profs = ns.Char().profs
   if not profName or not profs[profName] then profName = next(profs) end

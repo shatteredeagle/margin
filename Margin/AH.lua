@@ -45,6 +45,15 @@ local function build(parent)
   button:SetScript("OnLeave", GameTooltip_Hide)
 end
 
+local listButton
+local function buildList(parent)
+  listButton = CreateFrame("Button", "MarginAHListButton", parent, "UIPanelButtonTemplate")
+  listButton:SetSize(110, 22)
+  listButton:SetPoint("RIGHT", button, "LEFT", -4, 0)
+  listButton:SetText("Shopping list")
+  listButton:SetScript("OnClick", function() ns.ToggleShopping() end)
+end
+
 local function onShow(tries)
   local parent = AuctionHouseFrame or AuctionFrame
   if not parent then
@@ -52,6 +61,7 @@ local function onShow(tries)
     return
   end
   if not button then build(parent) end
+  if not listButton then buildList(parent) end
   updateText()
   button:Show()
 end

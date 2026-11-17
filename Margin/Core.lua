@@ -5,6 +5,7 @@ ns.defaults = {
   minAge = nil,       -- reserved: max Auctionator data age in days
   sortKey = "vendor", -- "vendor" or "ah"
   showAll = true,     -- list unprofitable / grey recipes too
+  ahList = true,      -- open the shopping list beside the auction house
   useTrainer = true,  -- route may include recipes you still have to learn from a trainer
 }
 
@@ -47,6 +48,8 @@ SlashCmdList.MARGIN = function(msg)
     ns.SetOpt("routeTarget", n)
     ns.Print(n and ("route target " .. n) or "route target: profession max")
     if ns.RefreshUI then ns.RefreshUI() end
+  elseif msg == "list" then
+    ns.ToggleShopping()
   elseif msg == "probe" then
     ns.Probe()
   elseif msg == "report" then
