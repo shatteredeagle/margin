@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Route: your skill is followed as you level, even with the profession window closed.
+- Route: completed steps are remembered (the recipe that raised your skill, the crafts, the cost and the date) under a "Completed steps" row.
+- Route: locked. The recipes it chose stay put while prices change, until you press Re-plan (or change a setting that changes the route). `/margin lock` turns locking off.
+- Clicking a recipe while the profession window is closed now lands on that recipe instead of the top of the list.
+
 ## 0.1.1-alpha
 
 - Route: crafts that make an intermediate (for example Medium Leather for Heavy Leather) now appear as "make" steps right before the step that uses them, deepest first.

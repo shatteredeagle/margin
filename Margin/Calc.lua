@@ -249,14 +249,20 @@ end
 -- One pass of the planner: at each skill point the available recipe with the
 -- lowest expected cost per skill-up wins (points are independent, so greedy per
 -- point is optimal). `skip` is a set of rows that may not be used.
-local function route(rows, s0, target, skip)
+local function route(rows, base, start, target, skip, force, byId)
   local segs, cur = {}, nil
   local total, crafts, gross = 0, 0, 0
-  for s = s0, target - 1 do
+  for s = start, target - 1 do
     local best, bestPer, bestCh
-    for _, row in ipairs(rows) do
+    -- a locked route keeps its earlier pick for this skill point while it is still usable
+    local pick = force and force[s] and byId[force[s]]
+    if pick and pick.missing == 0 and not skip[pick] and not pick.unavailable then
+      local ch = chanceAt(pick, base, s) * pick.r.ups
+      if ch > 0 then best, bestPer, bestCh = pick, pick.net / ch, ch end
+    end
+    for _, row in ipairs(best and {} or rows) do
       if row.missing == 0 and not skip[row] and not row.unavailable then
-        local ch = chanceAt(row, s0, s) * row.r.ups
+        local ch = chanceAt(row, base, s) * row.r.ups
         if ch > 0 then
           local per = row.net / ch
           if not best or per < bestPer or (per == bestPer and ch > bestCh) then
@@ -290,15 +296,19 @@ end
 -- Cheapest route from the scanned skill up to target, with a shopping list.
 -- With useTrainer, unlearned recipes a trainer teaches are candidates too, and a
 -- recipe stays in only if it saves more than its trainer fee.
-function ns.Plan(prof, target, profs, useTrainer)
+function ns.Plan(prof, target, profs, useTrainer, force)
   profs = profs or (ns.Char and ns.Char().profs) or { prof }
   local idx = craftIndex(profs)
   local rows = ns.Evaluate(prof, profs, useTrainer)
-  local s0 = prof.skill
+  -- recipes' skill-up colours were read at scanSkill; the route starts from the skill you have now
+  local base = prof.scanSkill or prof.skill
+  local start = prof.skill
+  local byId = {}
+  for _, row in ipairs(rows) do if not byId[row.r.id] then byId[row.r.id] = row end end
   local skip = {}
   local segs, total, crafts, gross
   while true do
-    segs, total, crafts, gross = route(rows, s0, target, skip)
+    segs, total, crafts, gross = route(rows, base, start, target, skip, force, byId)
     local used = {}
     for _, seg in ipairs(segs) do
       if not seg.gap and seg.row.learn then used[seg.row] = true end
@@ -306,7 +316,7 @@ function ns.Plan(prof, target, profs, useTrainer)
     local worst, worstNet
     for row in pairs(used) do
       skip[row] = true
-      local _, alt = route(rows, s0, target, skip)
+      local _, alt = route(rows, base, start, target, skip, force, byId)
       skip[row] = nil
       local net = alt - total - row.learn.fee -- what dropping this recipe would save
       if net < 0 and (not worstNet or net < worstNet) then worst, worstNet = row, net end
@@ -358,4 +368,21 @@ function ns.Plan(prof, target, profs, useTrainer)
   end
   return { segs = segs, cost = total, gross = gross, crafts = crafts, shop = shop, shopCost = shopCost,
     target = target, learn = learn, learnCost = learnCost }
+end
+
+-- The recipe chosen for each stretch of a plan, to lock a route, and back to a skill -> recipe table.
+function ns.PlanPicks(plan)
+  local out = {}
+  for _, seg in ipairs(plan.segs) do
+    if not seg.gap then out[#out + 1] = { id = seg.row.r.id, from = seg.from, to = seg.to } end
+  end
+  return out
+end
+
+function ns.ForceFromPicks(picks)
+  local f = {}
+  for _, p in ipairs(picks) do
+    for s = p.from, p.to - 1 do f[s] = p.id end
+  end
+  return f
 end

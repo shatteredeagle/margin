@@ -8,6 +8,7 @@ ns.defaults = {
   sortKey = "vendor", -- "vendor" or "ah"
   showAll = true,     -- list unprofitable / grey recipes too
   resale = "vendor",  -- leveling cost minus what the result sells for: "vendor" | "ah" | "off"
+  routeLock = true,   -- keep the route fixed until you press Re-plan
   useRep = false,     -- false: base (worst-case) prices, rep-locked items unavailable; true: use my reputation
   merchantList = true, -- open the vendor buy list beside a vendor that sells route items
   ahList = true,      -- open the shopping list beside the auction house
@@ -78,6 +79,11 @@ SlashCmdList.MARGIN = function(msg)
     for name, p in pairs(ns.Char().profs) do
       ns.Print(("%s %d/%d: %d learned, %d unlearned considered"):format(name, p.skill, p.max, #p.recipes, #(p.unlearned or {})))
     end
+  elseif msg == "lock" then
+    ns.SetOpt("routeLock", not ns.Opt("routeLock"))
+    ns.Print(ns.Opt("routeLock") and "route locked until you press Re-plan" or "route re-plans whenever prices change")
+    if ns.InvalidatePlan then ns.InvalidatePlan() end
+    if ns.RefreshUI then ns.RefreshUI() end
   elseif msg == "rep" then
     ns.SetOpt("useRep", not ns.Opt("useRep"))
     ns.Print(ns.Opt("useRep") and "using my reputation (discounts seen at vendors, unlocked patterns)"

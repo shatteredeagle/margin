@@ -107,16 +107,21 @@ function ns.Scan(verbose)
     end
   end
 
+  local before = ns.Char().profs[base.professionName]
+  local oldSkill = before and before.skill
   for _, r in ipairs(recipes) do r.prof = base.professionName end
   for _, r in ipairs(unlearned) do r.prof = base.professionName end
   ns.Char().profs[base.professionName] = {
-    id = base.professionID, skill = base.skillLevel, max = base.maxSkillLevel,
+    id = base.professionID, skill = base.skillLevel, max = base.maxSkillLevel, scanSkill = base.skillLevel,
     time = time(), recipes = recipes, unlearned = unlearned,
     codex = C ~= nil, taught = taught, -- Polestar present / recipes taught by items found
   }
   if verbose then
     ns.Print(base.professionName, #recipes, "recipes scanned,", #unlearned - taught, "trainer recipes,",
       taught, "taught by items")
+  end
+  if oldSkill and base.skillLevel > oldSkill and ns.RecordProgress then
+    ns.RecordProgress(base.professionName, oldSkill, base.skillLevel)
   end
   ns.needRescan = missingTips > 0 -- recipe item tooltips were not loaded yet; try again when they arrive
   if ns.RefreshUI then ns.RefreshUI() end

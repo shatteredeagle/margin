@@ -28,6 +28,7 @@ Updates are new releases. Type `/margin` in game, or use the Margin button on a 
 | `/margin cut 5` | AH cut in percent |
 | `/margin chance 80` | how often an AH listing sells (the deposit is lost when it does not) |
 | `/margin buy`, `/margin list` | toggle the vendor popup / the AH shopping list |
+| `/margin lock` | toggle keeping the route fixed until you press Re-plan |
 | `/margin coverage` | which professions have trainer data |
 | `/margin debug` | print what Margin is doing |
 

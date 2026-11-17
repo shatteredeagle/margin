@@ -276,6 +276,23 @@ local function build()
     self:SetText(""); self:ClearFocus(); setOffset(0)
   end)
 
+  frame.replan = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+  frame.replan:SetSize(96, 20)
+  frame.replan:SetPoint("TOPRIGHT", -34, -58)
+  frame.replan:SetText("Re-plan")
+  frame.replan:SetScript("OnClick", function()
+    local _, _, name = ns.CurrentPlan()
+    ns.ClearLock(name)
+    ns.RefreshUI()
+  end)
+  frame.replan:SetScript("OnEnter", function(self)
+    GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+    GameTooltip:AddLine("Re-plan the route")
+    GameTooltip:AddLine("The route stays as planned while prices change. Re-plan picks the cheapest recipes again from your skill now.", 1, 1, 1, true)
+    GameTooltip:Show()
+  end)
+  frame.replan:SetScript("OnLeave", GameTooltip_Hide)
+
   frame.hdr = {}
   local function hdr(i, x, w, just)
     local b = CreateFrame("Button", nil, frame)
@@ -390,6 +407,7 @@ local function build()
     row:SetScript("OnLeave", GameTooltip_Hide)
     row:SetScript("OnClick", function(self)
       local e = self.entry
+      if e and e.action then return e.action() end
       local c = e and e.craft
       if not c then return end
       if c.learnFirst then
@@ -457,6 +475,13 @@ end
 local planCache = {}
 function ns.InvalidatePlan() wipe(planCache) end
 
+-- Forget the locked route for a profession; the next plan is a fresh one.
+function ns.ClearLock(name)
+  local locks = ns.Char().locks
+  if locks and name then locks[name] = nil end
+  ns.InvalidatePlan()
+end
+
 function ns.CurrentPlan()
   local profs = ns.Char().profs
   local name, prof = profName, profName and profs[profName]
@@ -464,18 +489,61 @@ function ns.CurrentPlan()
   if not prof then return nil end
   local target = ns.Opt("routeTarget") or prof.max
   target = math.min(math.max(target, prof.skill + 1), prof.max)
-  local key = table.concat({ name, prof.skill, prof.time or 0, tostring(ns.Opt("resale")),
-    tostring(ns.Opt("useTrainer")), target }, "|")
+
+  -- A locked route keeps the recipe it chose for each skill point, so price changes do not
+  -- reshuffle a route you have started. Changing a setting that changes the route re-locks it.
+  local char = ns.Char()
+  char.locks = char.locks or {}
+  local useLock = ns.Opt("routeLock") and not ns.Opt("noLock")
+  local lockKey = table.concat({ tostring(ns.Opt("resale")), tostring(ns.Opt("useTrainer")),
+    ns.Opt("useRep") and "rep" or "base", target }, "|")
+  local lock = useLock and char.locks[name] or nil
+  if lock and lock.key ~= lockKey then lock = nil; char.locks[name] = nil end
+
+  local key = table.concat({ name, prof.skill, prof.scanSkill or 0, prof.time or 0, lockKey,
+    lock and lock.t or "free", ns.Opt("noLock") and "n" or "l" }, "|")
   local hit = planCache[key]
   if not hit then
-    hit = ns.Plan(prof, target, nil, ns.Opt("useTrainer"))
+    hit = ns.Plan(prof, target, nil, ns.Opt("useTrainer"), lock and ns.ForceFromPicks(lock.picks) or nil)
     planCache[key] = hit
+    if useLock and not lock then
+      char.locks[name] = { key = lockKey, t = time(), picks = ns.PlanPicks(hit) }
+    end
   end
   return hit, prof, name, target
 end
 
+local showHistory = false
+
+local function historyEntries(list)
+  local h = ns.History(profName)
+  if #h == 0 then return end
+  local spent = 0
+  for _, e in ipairs(h) do spent = spent + (e.cost or 0) end
+  list[#list + 1] = {
+    name = ("|cff909090%s Completed steps (%d)|r"):format(showHistory and "v" or ">", #h),
+    cost = "", sale = "", val = money(spent),
+    action = function() showHistory = not showHistory; ns.RefreshUI() end,
+    tip = function(tt)
+      tt:AddLine("Completed steps")
+      tt:AddLine("What raised your skill, with what it cost at today's prices. Click to show or hide.", 1, 1, 1, true)
+    end,
+  }
+  if not showHistory then return end
+  for i = #h, 1, -1 do
+    local e = h[i]
+    list[#list + 1] = {
+      icon = e.icon,
+      name = ("|cff909090%d-%d  %s|r"):format(e.from, e.to, e.name),
+      cost = e.crafts > 0 and ("%d crafts"):format(e.crafts) or "",
+      sale = date("%b %d", e.t), val = e.cost > 0 and money(e.cost) or "",
+    }
+  end
+end
+
 local function routeEntries(plan)
   local list = {}
+  historyEntries(list)
   for _, seg in ipairs(plan.segs) do
     if seg.gap then
       list[#list + 1] = { name = ("|cffff9090%d-%d  no priced recipe|r"):format(seg.from, seg.to), cost = "", sale = "", val = "?" }
@@ -547,11 +615,11 @@ end
 local function routeData()
   local resale, trainer = ns.Opt("resale"), ns.Opt("useTrainer")
   local function planFor(r, t)
-    return ns.With({ resale = r, useTrainer = t }, function() return (ns.CurrentPlan()) end)
+    return ns.With({ resale = r, useTrainer = t, noLock = true }, function() return (ns.CurrentPlan()) end)
   end
   local cards, sel = {}, nil
   for _, m in ipairs({ "vendor", "ah", "off" }) do
-    local plan = planFor(m, trainer)
+    local plan = (m == resale) and (ns.CurrentPlan()) or planFor(m, trainer) -- the chosen card is the real, locked route
     cards[#cards + 1] = {
       label = m == "off" and "No resale (reagents)" or ("Resale: " .. (m == "ah" and "AH" or "vendor")),
       plan = plan, total = plan.cost + plan.learnCost, selected = (m == resale),
@@ -614,6 +682,8 @@ redraw = function()
   end
   frame.search:SetShown(tab ~= "route")
   frame.searchLabel:SetShown(tab ~= "route")
+  frame.replan:SetShown(tab == "route" and prof ~= nil)
+  frame.replan:SetEnabled(ns.Opt("routeLock") and true or false)
   if tab ~= "route" or not prof then for _, c in ipairs(frame.cards) do c:Hide() end end
 
   local list = {}
@@ -621,8 +691,9 @@ redraw = function()
     if tab == "route" then
       cache = cache or routeData()
       list = cache.list
-      frame.info:SetText(("%s %d/%d  -  route to %d  (what it costs after selling the crafts, plus trainer fees)"):format(
-        profName, prof.skill, prof.max, cache.target))
+      local lock = ns.Char().locks and ns.Char().locks[profName]
+      frame.info:SetText(("%s %d/%d  -  route to %d%s"):format(profName, prof.skill, prof.max, cache.target,
+        lock and ns.Opt("routeLock") and ("  |cff909090(locked %s)|r"):format(date("%b %d", lock.t)) or ""))
       for i, c in ipairs(frame.cards) do
         local d = cache.cards[i]
         c.action = d.action

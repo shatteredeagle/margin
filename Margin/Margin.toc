@@ -17,6 +17,7 @@ Prices.lua
 Taught.lua
 Scan.lua
 Calc.lua
+Progress.lua
 UI.lua
 Shopping.lua
 Merchant.lua

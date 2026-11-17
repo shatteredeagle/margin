@@ -141,4 +141,19 @@ local seg3 = plan3.segs[1]
 assert(seg3.row.r == user2 and #seg3.prep == 1, "one prep step")
 assert(seg3.prep[1].item == 15 and seg3.prep[1].units == 6 and seg3.prep[1].crafts == 3, seg3.prep[1].crafts)
 assert(seg3.prep[1].recipe == inter2)
+
+-- locking and skill drift: forced picks win while usable; the route starts from the current skill
+local FA = { id = 60, out = 70, qty = 1, diff = 0, ups = 1, trivial = 60, reagents = { {item = 1, count = 1} } }   -- 10c
+local FB = { id = 61, out = 71, qty = 1, diff = 0, ups = 1, trivial = 60, reagents = { {item = 2, count = 1} } }   -- 50c
+local pf = { skill = 14, scanSkill = 10, max = 60, recipes = { FA, FB } }
+local free = ns.Plan(pf, 18, { pf }, false)
+assert(free.segs[1].from == 14 and free.segs[1].row.r == FA, "starts from the current skill")
+local locked = ns.Plan(pf, 18, { pf }, false, ns.ForceFromPicks({ { id = 61, from = 14, to = 16 } }))
+assert(locked.segs[1].row.r == FB and locked.segs[1].to == 16 and locked.segs[2].row.r == FA, "forced picks first, then best")
+local picks = ns.PlanPicks(locked)
+assert(#picks == 2 and picks[1].id == 61 and picks[2].id == 60)
+-- a forced recipe that became unusable is dropped
+FB.reagents = { {item = 999, count = 1} }
+local fallback = ns.Plan(pf, 18, { pf }, false, ns.ForceFromPicks({ { id = 61, from = 14, to = 16 } }))
+assert(fallback.segs[1].row.r == FA)
 print("calc ok")
