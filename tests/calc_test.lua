@@ -1,6 +1,12 @@
 -- Offline check of Calc.lua with stubbed prices. Run: lua tests/calc_test.lua
 local resaleMode = "off"
-local ns = { Opt = function(k) if k == "resale" then return resaleMode end return 0.05 end }
+local ns = { Opt = function(k) if k == "resale" then return resaleMode elseif k == "ahChance" then return 0.8 end return 0.05 end }
+local depositEach = 0
+ns.Deposit = function() return depositEach end
+ns.AHNetPerUnit = function(id)
+  local ah = ns.AHPrice(id)
+  return ah and math.floor(ah * 0.95 - depositEach * 0.2) or nil
+end
 local prices = { [1] = {10, "vendor"}, [2] = {50, "ah"} }
 ns.VENDOR_SEED = {}
 ns.BuyPrice = function(id) local p = prices[id]; if p then return p[1], p[2] end end
@@ -119,4 +125,10 @@ T2.teach = { { item = 52, rank = 12, rep = true } }
 assert(ns.TeachOption(T2) == nil)
 T2.teach[1].rep = false
 assert(ns.TeachOption(T2).how == "vendor")
+
+-- deposit: with 100c deposit and an 80% sale chance the AH figure loses 20c
+depositEach = 100
+local _, ah2 = ns.Revenue({ out = 9, qty = 1 })
+assert(ah2 == 930, ah2)
+depositEach = 0
 print("calc ok")

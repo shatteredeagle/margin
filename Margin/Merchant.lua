@@ -12,6 +12,7 @@ local _, ns = ...
 
 local ROWS, ROW_H, WIDTH = 8, 38, 350
 local frame, offset, list = nil, 0, {}
+local buyList, sellList, mode = {}, {}, "buy" -- list is whichever the tab shows
 local busy = false
 local issued = {}     -- item -> { base, units, t }: bought, not yet visible in the bags
 local forbidden = false
@@ -58,26 +59,119 @@ local function findIndex(item)
   end
 end
 
+local computeSell -- below
+
 local function compute()
-  list = {}
+  buyList = {}
   local plan = ns.CurrentPlan()
-  if not plan then return end
+  if not plan then list = buyList; sellList = {}; return end
   for _, it in ipairs(plan.shop) do
     local index, price, stack, avail = findIndex(it.item)
     if index then
       local unit = price / stack
       local cheaper = it.src == "ah" and it.unit and unit > it.unit + 0.001 -- the AH beats this vendor
       local have = effectiveHave(it.item)
-      list[#list + 1] = { item = it.item, need = it.count, have = have, buy = math.max(0, it.count - have),
+      buyList[#buyList + 1] = { item = it.item, need = it.count, have = have, buy = math.max(0, it.count - have),
         stack = stack, price = price, unit = unit, cheaper = cheaper, avail = avail }
     end
   end
   local function rank(r) return r.buy > 0 and not r.cheaper and 1 or (r.buy > 0 and 2 or 3) end
-  for i, r in ipairs(list) do r.i = i end
-  table.sort(list, function(a, b)
+  for i, r in ipairs(buyList) do r.i = i end
+  table.sort(buyList, function(a, b)
     if rank(a) ~= rank(b) then return rank(a) < rank(b) end
     return a.i < b.i
   end)
+  computeSell(plan)
+  list = mode == "sell" and sellList or buyList
+end
+
+---------------------------------------------------------------------------
+-- Selling the route's crafted items
+---------------------------------------------------------------------------
+
+-- The route's crafted items sitting in your bags. Never an item a later step or the shopping
+-- list uses as a reagent (that would sell your own materials).
+computeSell = function(plan)
+  sellList = {}
+  local reagent = {}
+  for _, seg in ipairs(plan.segs) do
+    if not seg.gap then
+      for _, rg in ipairs(seg.row.r.reagents) do reagent[rg.item] = true end
+    end
+  end
+  for _, it in ipairs(plan.shop) do reagent[it.item] = true end
+  local seen = {}
+  for _, seg in ipairs(plan.segs) do
+    local r = not seg.gap and seg.row.r
+    if r and r.out and not reagent[r.out] then
+      local row = seen[r.out]
+      if not row then
+        local count = (C_Item.GetItemCount and C_Item.GetItemCount(r.out, false)) or 0 -- bags only
+        local unit = ns.VendorSell(r.out)
+        if count > 0 and unit and unit > 0 then
+          -- the AH figure already has the cut and the expected lost deposit taken off (Prices.lua)
+          local ahNet = ns.AHNetPerUnit(r.out)
+          row = { item = r.out, sell = true, count = count, unit = unit, value = count * unit, steps = {},
+            ahNet = ahNet, ahBetter = not ns.Opt("sellAllVendor") and ahNet ~= nil and ahNet > unit }
+          seen[r.out] = row
+          sellList[#sellList + 1] = row
+        end
+      end
+      if row then row.steps[#row.steps + 1] = ("%d-%d"):format(seg.from, seg.to) end
+    end
+  end
+end
+
+local sellBusy = false
+local function doSell(rows)
+  if sellBusy then return end
+  local slots, wanted = {}, {}
+  for _, r in ipairs(rows) do wanted[r.item] = true end
+  local lastBag = NUM_TOTAL_EQUIPPED_BAG_SLOTS or NUM_BAG_SLOTS or 4
+  for bag = 0, lastBag do
+    local n = (C_Container.GetContainerNumSlots and C_Container.GetContainerNumSlots(bag)) or 0
+    for slot = 1, n do
+      local info = C_Container.GetContainerItemInfo(bag, slot)
+      if info and wanted[info.itemID] and not info.isLocked then
+        slots[#slots + 1] = { bag = bag, slot = slot, item = info.itemID }
+      end
+    end
+  end
+  if #slots == 0 then return end
+  sellBusy = true
+  local i, units, copper = 0, 0, 0
+  local function step()
+    i = i + 1
+    local t = slots[i]
+    if not t or not (MerchantFrame and MerchantFrame:IsShown()) then
+      sellBusy = false
+      ns.Print(("Sold %d crafted items for about %s."):format(units, ns.Money(copper)))
+      return ns.RefreshMerchant()
+    end
+    -- re-read the slot: only sell it if it still holds the item we meant
+    local info = C_Container.GetContainerItemInfo(t.bag, t.slot)
+    if info and info.itemID == t.item and not info.isLocked then
+      local each = ns.VendorSell(t.item) or 0
+      units = units + (info.stackCount or 1)
+      copper = copper + each * (info.stackCount or 1)
+      C_Container.UseContainerItem(t.bag, t.slot) -- with a vendor open this sells the stack
+    end
+    C_Timer.After(0.12, step)
+  end
+  step()
+end
+
+StaticPopupDialogs["MARGIN_SELL_CONFIRM"] = {
+  text = "%s", button1 = YES, button2 = NO, timeout = 0, whileDead = false, hideOnEscape = true,
+  OnAccept = function(_, data) if data then data() end end,
+}
+
+local function confirmSell(rows)
+  local n, v = 0, 0
+  for _, r in ipairs(rows) do n = n + r.count; v = v + r.value end
+  if n == 0 then return end
+  StaticPopup_Show("MARGIN_SELL_CONFIRM", ("Margin: sell %d crafted items to this vendor for %s?"):format(n, ns.Money(v)),
+    nil, function() doSell(rows) end)
 end
 
 local function lotsFor(r) return math.ceil(r.buy / r.stack) end
@@ -181,7 +275,7 @@ end
 
 local function buyAll()
   local rows = {}
-  for _, r in ipairs(list) do if buyable(r) then rows[#rows + 1] = r end end
+  for _, r in ipairs(buyList) do if buyable(r) then rows[#rows + 1] = r end end
   if MarginDB.buyPerClick then -- one chunk per click: the first row that still needs some
     if rows[1] then buyOne(rows[1]) end
     return
@@ -195,7 +289,7 @@ end
 
 local function build()
   frame = CreateFrame("Frame", "MarginMerchant", UIParent, "BasicFrameTemplateWithInset")
-  frame:SetSize(WIDTH, 112 + ROWS * ROW_H)
+  frame:SetSize(WIDTH, 134 + ROWS * ROW_H)
   frame:SetFrameStrata("HIGH")
   frame:EnableMouse(true)
   frame:EnableMouseWheel(true)
@@ -207,7 +301,36 @@ local function build()
   frame.TitleText:SetText("Margin: buy for your route")
 
   frame.info = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-  frame.info:SetPoint("TOPLEFT", 14, -32)
+  local function tabButton(x, text, m)
+    local b = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+    b:SetSize(80, 20)
+    b:SetPoint("TOPLEFT", x, -28)
+    b:SetText(text)
+    b:SetScript("OnClick", function() mode = m; offset = 0; ns.RefreshMerchant() end)
+    return b
+  end
+  frame.tBuy = tabButton(12, "Buy", "buy")
+  frame.tSell = tabButton(96, "Sell", "sell")
+
+  frame.skipAH = CreateFrame("CheckButton", nil, frame, "UICheckButtonTemplate")
+  frame.skipAH:SetSize(22, 22)
+  frame.skipAH:SetPoint("TOPLEFT", 186, -27)
+  frame.skipAH.text:SetText("Don't bother with the AH")
+  frame.skipAH.text:SetFontObject("GameFontNormalSmall")
+  frame.skipAH:SetScript("OnClick", function(self)
+    ns.SetOpt("sellAllVendor", self:GetChecked() and true or false)
+    ns.RefreshMerchant()
+  end)
+  frame.skipAH:SetScript("OnEnter", function(self)
+    GameTooltip:SetOwner(self, "ANCHOR_BOTTOMRIGHT")
+    GameTooltip:AddLine("Sell everything to the vendor")
+    GameTooltip:AddLine("Off: items the AH would pay more for (after the cut and the deposit you lose when a listing does not sell) are left out of \"Sell all\".", 1, 1, 1, true)
+    GameTooltip:AddLine("On: sell them all to the vendor anyway.", 0.7, 0.7, 0.7, true)
+    GameTooltip:Show()
+  end)
+  frame.skipAH:SetScript("OnLeave", GameTooltip_Hide)
+
+  frame.info:SetPoint("TOPLEFT", 14, -54)
   frame.info:SetWidth(WIDTH - 28)
   frame.info:SetJustifyH("LEFT")
   frame.info:SetWordWrap(false)
@@ -216,7 +339,7 @@ local function build()
   for i = 1, ROWS do
     local row = CreateFrame("Frame", nil, frame)
     row:SetSize(WIDTH - 24, ROW_H)
-    row:SetPoint("TOPLEFT", 12, -52 - (i - 1) * ROW_H)
+    row:SetPoint("TOPLEFT", 12, -74 - (i - 1) * ROW_H)
     row.btn = CreateFrame("Button", nil, row)
     row.btn:SetSize(28, 28)
     row.btn:SetPoint("LEFT", 0, 0)
@@ -233,7 +356,11 @@ local function build()
     row.buy = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
     row.buy:SetSize(78, 22)
     row.buy:SetPoint("RIGHT", 0, 0)
-    row.buy:SetScript("OnClick", function() if row.data then buyOne(row.data) end end)
+    row.buy:SetScript("OnClick", function()
+      local d = row.data
+      if not d then return end
+      if d.sell then confirmSell({ d }) else buyOne(d) end
+    end)
     row.name = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     row.name:SetPoint("TOPLEFT", row.btn, "TOPRIGHT", 8, 0)
     row.name:SetPoint("RIGHT", row.buy, "LEFT", -6, 0)
@@ -250,7 +377,15 @@ local function build()
   frame.all = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
   frame.all:SetSize(WIDTH - 28, 26)
   frame.all:SetPoint("BOTTOM", 0, 30)
-  frame.all:SetScript("OnClick", buyAll)
+  frame.all:SetScript("OnClick", function()
+    if mode == "sell" then
+      local rows = {}
+      for _, r in ipairs(sellList) do if not r.ahBetter then rows[#rows + 1] = r end end
+      confirmSell(rows)
+    else
+      buyAll()
+    end
+  end)
 
   frame.note = frame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
   frame.note:SetPoint("BOTTOMLEFT", 14, 10)
@@ -261,13 +396,25 @@ end
 function ns.RefreshMerchant()
   if not (frame and frame:IsShown()) then return end
   compute()
+  frame.tBuy:SetEnabled(mode ~= "buy")
+  frame.tSell:SetEnabled(mode ~= "sell")
+  frame.skipAH:SetShown(mode == "sell")
+  frame.skipAH:SetChecked(ns.Opt("sellAllVendor") and true or false)
   local cost, any = 0, false
-  for _, r in ipairs(list) do
-    if buyable(r) then any = true; cost = cost + lotsFor(r) * r.price end
+  if mode == "buy" then
+    for _, r in ipairs(buyList) do
+      if buyable(r) then any = true; cost = cost + lotsFor(r) * r.price end
+    end
+    frame.info:SetText(any and ("Still to buy here: %s   (you have %s)"):format(ns.Money(cost), ns.Money(GetMoney()))
+      or "Nothing more to buy here for your route.")
+  else
+    local value = 0
+    for _, r in ipairs(sellList) do
+      if not r.ahBetter then any = true; value = value + r.value end
+    end
+    frame.info:SetText(#sellList > 0 and ("Crafted items in your bags: %s at this vendor"):format(ns.Money(value))
+      or "No crafted items from your route in your bags.")
   end
-  local gold = GetMoney()
-  frame.info:SetText(any and ("Still to buy here: %s   (you have %s)"):format(ns.Money(cost), ns.Money(gold))
-    or "Nothing more to buy here for your route.")
   offset = math.max(0, math.min(offset, math.max(0, #list - ROWS)))
   for i = 1, ROWS do
     local row, r = frame.rows[i], list[i + offset]
@@ -277,28 +424,43 @@ function ns.RefreshMerchant()
       local n = C_Item.GetItemNameByID(r.item)
       if not n then C_Item.RequestLoadItemDataByID(r.item) end
       row.name:SetText(n or ("item " .. r.item))
-      if r.cheaper then
+      if r.sell then
+        row.sub:SetText(("%d in bags  -  %s  (step %s)%s"):format(r.count, ns.Money(r.value), table.concat(r.steps, ", "),
+          r.ahBetter and ("  |cffffd070AH ~%s each|r"):format(ns.Money(r.ahNet)) or ""))
+        row.name:SetTextColor(1, 1, 1)
+        row.buy:SetShown(true)
+        row.buy:SetText(("Sell %d"):format(r.count))
+        row.buy:SetEnabled(not sellBusy)
+      elseif r.cheaper then
         row.sub:SetText("|cffffd070the AH is cheaper|r")
         row.name:SetTextColor(0.7, 0.7, 0.7)
+        row.buy:SetShown(false)
       elseif r.buy == 0 then
         row.sub:SetText(("need %d, you have %d"):format(r.need, r.have))
         row.name:SetTextColor(0.5, 0.8, 0.5)
+        row.buy:SetShown(false)
       else
         row.sub:SetText(("need %d, have %d  -  %s"):format(r.need, r.have, ns.Money(lotsFor(r) * r.price)))
         row.name:SetTextColor(1, 1, 1)
+        row.buy:SetShown(buyable(r))
+        row.buy:SetText(("Buy %d"):format(r.buy))
+        row.buy:SetEnabled(not busy)
       end
-      row.buy:SetShown(buyable(r))
-      row.buy:SetText(("Buy %d"):format(r.buy))
-      row.buy:SetEnabled(not busy)
       row:Show()
     else
       row:Hide()
     end
   end
   frame.all:SetShown(any)
-  frame.all:SetEnabled(any and not busy)
-  frame.all:SetText(busy and "Buying..." or (MarginDB.buyPerClick and "Buy next stack (click per stack)" or "Buy everything for the route"))
-  frame.note:SetText(any and "Buys only what you still need; stops if bags are full or gold runs out." or "")
+  if mode == "sell" then
+    frame.all:SetEnabled(any and not sellBusy)
+    frame.all:SetText(sellBusy and "Selling..." or "Sell all crafted items")
+    frame.note:SetText(any and "Asks first. Skips items the AH pays more for (unless you tick the box) and anything a later step uses." or "")
+  else
+    frame.all:SetEnabled(any and not busy)
+    frame.all:SetText(busy and "Buying..." or (MarginDB.buyPerClick and "Buy next stack (click per stack)" or "Buy everything for the route"))
+    frame.note:SetText(any and "Buys only what you still need; stops if bags are full or gold runs out." or "")
+  end
 end
 
 -- Remember what this vendor charges per unit for plain-gold, unlimited items (feeds Prices.lua).
@@ -317,9 +479,11 @@ local function showHere()
   if not ns.Opt("merchantList") then return end
   if not frame then build() end
   compute()
-  local any = false
-  for _, r in ipairs(list) do if buyable(r) then any = true end end
-  if not any or frame:IsShown() then return end
+  local anyBuy, anySell = false, #sellList > 0
+  for _, r in ipairs(buyList) do if buyable(r) then anyBuy = true end end
+  if not (anyBuy or anySell) or frame:IsShown() then return end
+  mode = anyBuy and "buy" or "sell"
+  compute()
   frame:SetParent(MerchantFrame)
   frame:ClearAllPoints()
   frame:SetPoint("TOPLEFT", MerchantFrame, "TOPRIGHT", 4, 0)

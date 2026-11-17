@@ -2,6 +2,8 @@ local _, ns = ...
 
 ns.defaults = {
   ahCut = 0.05,       -- fraction the AH keeps when a sale completes
+  ahChance = 0.8,     -- how often a listing sells; the deposit is lost when it does not
+  sellAllVendor = false, -- vendor "sell all" ignores the AH ("do not bother with the AH")
   minAge = nil,       -- reserved: max Auctionator data age in days
   sortKey = "vendor", -- "vendor" or "ah"
   showAll = true,     -- list unprofitable / grey recipes too
@@ -92,6 +94,9 @@ SlashCmdList.MARGIN = function(msg)
     ns.Probe()
   elseif msg == "report" then
     ns.Report()
+  elseif msg:match("^chance") then
+    local pct = tonumber(msg:match("chance%s+(%d+)"))
+    if pct then ns.SetOpt("ahChance", math.min(100, pct) / 100); ns.Print("AH sale chance", pct .. "%"); if ns.RefreshUI then ns.RefreshUI() end end
   elseif msg:match("^cut") then
     local pct = tonumber(msg:match("cut%s+(%d+)"))
     if pct then ns.SetOpt("ahCut", pct / 100); ns.Print("AH cut", pct .. "%") end

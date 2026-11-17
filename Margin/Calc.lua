@@ -56,9 +56,9 @@ end
 function ns.Revenue(r)
   if not r.out then return nil, nil end
   local vend = ns.VendorSell(r.out)
-  local ah = ns.AHPrice(r.out)
+  local perUnit = ns.AHNetPerUnit(r.out) -- after the cut and the deposit lost on unsold listings
   if vend then vend = vend * r.qty end
-  if ah then ah = math.floor(ah * r.qty * (1 - ns.Opt("ahCut"))) end
+  local ah = perUnit and math.floor(perUnit * r.qty) or nil
   return vend, ah
 end
 

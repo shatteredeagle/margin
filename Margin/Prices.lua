@@ -79,3 +79,26 @@ function ns.VendorSell(itemID)
   if sell == nil then C_Item.RequestLoadItemDataByID(itemID) end
   return sell
 end
+
+-- Deposit the AH takes when you list `count` of an item for 12 hours (kept if it sells, lost if it
+-- does not). The game's own calculation when it has one, else 15% of the vendor value.
+function ns.Deposit(itemID, count)
+  count = count or 1
+  local AH = C_AuctionHouse
+  if AH and AH.CalculateCommodityDeposit then
+    local ok, d = pcall(AH.CalculateCommodityDeposit, itemID, 1, count)
+    if ok and type(d) == "number" then return d end
+  end
+  local sell = ns.VendorSell(itemID)
+  return sell and math.floor(sell * 0.15 * count) or 0
+end
+
+-- What one unit is worth sold on the AH: the price after the cut, minus the deposit you
+-- expect to lose when it does not sell (ahChance is how often it does).
+function ns.AHNetPerUnit(itemID)
+  local ah = ns.AHPrice(itemID)
+  if not ah then return nil end
+  local net = ah * (1 - ns.Opt("ahCut"))
+  local loss = ns.Deposit(itemID, 1) * (1 - ns.Opt("ahChance"))
+  return math.floor(net - loss)
+end
