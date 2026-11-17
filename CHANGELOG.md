@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- "Margin: N unpriced" now also covers the Profit tab's "Recipes: all" view: the reagents and sale prices of the unlearned recipes (and the sale prices of your own, for the AH column), so every profit figure can be filled in. Long lists are searched 60 items per click.
+
 - Vendor prices now include food and drink sold by vendors (bread, water, milk, juice), so cooking recipes that use them can be priced.
 
 ## 0.1.4-alpha

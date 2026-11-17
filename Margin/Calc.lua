@@ -191,7 +191,7 @@ end
 
 -- Items Margin cannot price at all (reagents, or with includeOutputs the results
 -- of recipes that have no AH price), as a list of item IDs.
-function ns.MissingItems(profs, includeOutputs, includeRecipes)
+function ns.MissingItems(profs, includeOutputs, includeRecipes, includeAll)
   local idx = craftIndex(profs)
   local out, seen = {}, {}
   local recent = time() - 12 * 3600
@@ -209,6 +209,18 @@ function ns.MissingItems(profs, includeOutputs, includeRecipes)
         if not ns.UnitPrice(rg.item, idx) then add(rg.item) end
       end
       if includeOutputs and r.out and not ns.AHPrice(r.out) then add(r.out) end
+    end
+    -- the Profit tab's "all recipes" view: the reagents and the sale price of the unlearned ones too, so
+    -- every profit figure can be filled in (known recipes' sale prices as well, for the AH column)
+    if includeAll then
+      for _, list in ipairs({ prof.recipes, prof.unlearned or {}, prof.every or {} }) do
+        for _, r in ipairs(list) do
+          for _, rg in ipairs(r.reagents) do
+            if not ns.UnitPrice(rg.item, idx) then add(rg.item) end
+          end
+          if r.out and not ns.AHPrice(r.out) then add(r.out) end
+        end
+      end
     end
     -- recipe items (patterns, plans) that teach an unlearned craft and have no price yet
     -- (only for recipes whose reagents are all priced: otherwise the route could not use them anyway)

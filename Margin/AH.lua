@@ -4,8 +4,12 @@ local _, ns = ...
 -- full scan): through Auctionator when it is installed, else with Margin's own search. Shift-click also searches unpriced results.
 local button
 
+-- Most items looked up per click: Auctionator's search and the AH's own throttling both slow down
+-- badly with hundreds of terms, so a long list is worked through in rounds.
+local ROUND = 60
+
 local function missing(includeOutputs)
-  return ns.MissingItems(ns.Char().profs, includeOutputs, ns.Opt("useTrainer"))
+  return ns.MissingItems(ns.Char().profs, includeOutputs, ns.Opt("useTrainer"), ns.Opt("profitScope") == "all")
 end
 
 local function updateText()
@@ -24,6 +28,11 @@ end
 
 local function search(includeOutputs)
   local ids = missing(includeOutputs)
+  if #ids > ROUND then
+    local rest = #ids - ROUND
+    for i = #ids, ROUND + 1, -1 do ids[i] = nil end
+    ns.Print(("%d items this round, %d more: click again after it finishes."):format(ROUND, rest))
+  end
   local A = Auctionator and Auctionator.API and Auctionator.API.v1
   if not (A and A.MultiSearchExact) then
     markSearched(ids)

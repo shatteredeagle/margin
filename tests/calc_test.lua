@@ -266,4 +266,16 @@ assert(ns.RouteChance(gapped, 10, 89) == 0.75 and ns.RouteChance(gapped, 10, 90)
 assert(ns.RouteChance({ id = 901, trivial = 200, diff = 1 }, 100, 100) == 0.75)
 ns.GAP = nil
 oddsMode = "typical"
+
+-- all-recipes scope: unlearned recipes' reagents and every recipe's sale price join the unpriced list
+MarginDB = { searched = {} }
+local ek = { id = 300, out = 301, qty = 1, diff = 0, ups = 1, trivial = 50, extra = true, reagents = { {item = 777, count = 1} } }
+local pe = { skill = 10, max = 60, recipes = {}, unlearned = {}, every = { ek } }
+local plain = ns.MissingItems({ pe }, false, true, false)
+assert(#plain == 0, "without the all scope the extra recipes are not looked up")
+local withAll = ns.MissingItems({ pe }, false, true, true)
+local got = {}
+for _, id in ipairs(withAll) do got[id] = true end
+assert(got[777] and got[301] and #withAll == 2, "reagent and sale price of the unlearned recipe")
+MarginDB = nil
 print("calc ok")
