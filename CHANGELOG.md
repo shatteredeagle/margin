@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Fixed: items vendors sell in bundles (Mild Spices, water: 5 at a time) bought only part of what was asked, because the buy call takes a number of items, in multiples of the bundle, and Margin passed the number of bundles. They are now bought in whole bundles, and the first purchase of such an item is checked so that a client that counts bundles instead is detected after at most one bundle of extra.
+
 - **Margin's own full AH scan.** A "Full scan" button (and `/margin fullscan`) reads the whole auction house once and records the price and how much is for sale of every item Margin watches (reagents, products, pattern items): no item-by-item lookups. The AH allows one every 15 minutes. Without Auctionator it runs by itself when you open the AH (`/margin autoscan on|off` to change that). When Auctionator is installed its prices are still used, unless Margin's own scan is newer.
 
 - **The AH's supply is now part of the plan.** Margin records how much of an item is actually listed (and at what prices) whenever an AH search shows it. The planner spends each item's supply in skill order and switches to other recipes when it runs out (what you already hold counts), the route says which items limit it, and the shopping lists flag "only N on the AH" and cost the purchase by walking the listings cheapest first instead of assuming the lowest price for every unit. Supply data is kept for 3 days; items never looked at are assumed plentiful, so the AH button ("Margin: N to look up", was "unpriced") now also looks up the route's AH items whose listings it has not seen.

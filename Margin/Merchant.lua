@@ -214,22 +214,29 @@ local function buyable(r) return r.buy > 0 and not r.cheaper and not (r.avail ==
 -- Buying
 ---------------------------------------------------------------------------
 
+-- The buy call takes a number of ITEMS, in multiples of the bundle a vendor sells (Mild Spices and water
+-- come 5 at a time: asking for 5 buys one bundle, asking for 1 buys one spice). Items sold singly are the
+-- same thing. The first time a bundled item is bought it is bought one bundle at a time, so that if this
+-- client turns out to count bundles instead, it is noticed (MarginDB.bundleLots) after at most one
+-- bundle's worth of extra.
 local function chunk(item, need)
   local index, price, stack, avail = findIndex(item)
   if not index then return nil, "not sold here" end
   local remaining = need - effectiveHave(item)
   if remaining <= 0 then return 0 end
   local lotsNeeded = math.ceil(remaining / stack)
-  local maxLots = 1
-  if stack == 1 and GetMerchantItemMaxStack then maxLots = math.max(1, GetMerchantItemMaxStack(index) or 1) end
-  local lots = math.min(lotsNeeded, maxLots)
+  local maxUnits = (GetMerchantItemMaxStack and GetMerchantItemMaxStack(index)) or stack
+  local lotsPerCall = math.max(1, math.floor(maxUnits / stack))
+  if stack > 1 and not MarginDB.bundleConfirmed then lotsPerCall = 1 end -- prove the unit first
+  local lots = math.min(lotsNeeded, lotsPerCall)
   if avail >= 0 then lots = math.min(lots, avail) end
   lots = math.min(lots, math.floor(GetMoney() / price))
   if lots <= 0 then return nil, avail == 0 and "sold out" or "not enough gold" end
-  issued[item] = { base = owned(item), units = lots * stack, t = GetTime() }
+  local quantity = MarginDB.bundleLots and lots or lots * stack
+  issued[item] = { base = owned(item), units = lots * stack, stack = stack, t = GetTime() }
   forbidden = false
-  debug("buy", item, "lots", lots, "x", stack, "index", index)
-  BuyMerchantItem(index, lots)
+  debug("buy", item, "lots", lots, "x", stack, "quantity", quantity, "index", index)
+  BuyMerchantItem(index, quantity)
   if forbidden then
     issued[item] = nil
     return nil, "blocked"
@@ -250,6 +257,13 @@ local function runItem(item, need, perClick, done, bought)
     if not iss then return done(false, "cancelled", bought) end
     local got = owned(item) - iss.base
     if got >= iss.units then
+      if iss.stack > 1 and not MarginDB.bundleConfirmed then
+        MarginDB.bundleConfirmed = true
+        if got == iss.units * iss.stack then
+          MarginDB.bundleLots = true -- this client counts bundles, not items
+          ns.Print("Noted: this vendor's buy count is in bundles, so it is bought that way from now on.")
+        end
+      end
       issued[item] = nil
       bought = bought + iss.units
       if perClick or MarginDB.buyPerClick then return done(true, "chunk", bought) end
