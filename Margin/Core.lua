@@ -46,6 +46,8 @@ SlashCmdList.MARGIN = function(msg)
     ns.SetOpt("routeTarget", n)
     ns.Print(n and ("route target " .. n) or "route target: profession max")
     if ns.RefreshUI then ns.RefreshUI() end
+  elseif msg == "probe" then
+    ns.Probe()
   elseif msg == "report" then
     ns.Report()
   elseif msg:match("^cut") then
