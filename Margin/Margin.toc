@@ -1,6 +1,6 @@
 ## Interface: 16001
 ## Title: Margin
-## Notes: Profitable crafts and cheapest leveling recipes from your tradeskills, priced from Auctionator. Built for WoW Forever.
+## Notes: Profitable crafts, cheapest leveling routes and shopping lists for your tradeskills. Uses Auctionator prices when installed. Built for WoW Forever.
 ## Author: jesse
 ## X-License: MIT
 ## Version: 0.1.0

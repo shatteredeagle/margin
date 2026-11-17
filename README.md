@@ -19,3 +19,14 @@ the route include it. Without Polestar those recipes are simply not considered. 
 those pattern items so they get priced.
 
 AH purchases are credited when the AH confirms them, so shopping-list items are ticked off before the mail arrives.
+
+## Dependencies
+
+None required. Auctionator (prices, AH search) and Polestar (extra recipe-item data) are used when installed.
+Without Auctionator, Margin records the cheapest price it sees in its own AH searches ("Margin: N unpriced"
+button) and the prices of vendors you open. Bundled data: vendor reagent prices, trainer recipes and which item
+teaches which recipe (see THIRD_PARTY.md and `tools/`).
+
+Reputation: by default Margin uses base (worst-case) vendor prices and treats reputation-locked patterns as out
+of reach. The "My reputation" checkbox (or `/margin rep`) uses the lowest price you were charged at vendors you
+opened and counts patterns whose reputation you have reached. Trainer fees always use base prices.
