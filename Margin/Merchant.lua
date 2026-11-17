@@ -27,7 +27,7 @@ end
 
 -- What the bags hold, counting an unconfirmed purchase as already arrived.
 local function effectiveHave(item)
-  local h = owned(item)
+  local h = owned(item) + (ns.Transit and ns.Transit(item) or 0)
   local i = issued[item]
   if i and GetTime() - i.t < 3 and h < i.base + i.units then return i.base + i.units end
   return h

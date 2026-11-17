@@ -26,6 +26,42 @@ local function owned(item)
   return f(item, true) or 0 -- bags and bank
 end
 
+-- Purchases the AH has confirmed but that have not reached the bags yet (the modern AH
+-- delivers by mail). MarginDB.credits[item] = { base = bag count when bought, units, t }.
+-- Counted as owned until the bags catch up, so a bought item is ticked off at once.
+local WEEK = 7 * 86400
+function ns.Transit(item)
+  local c = MarginDB.credits and MarginDB.credits[item]
+  if not c then return 0 end
+  local have = owned(item)
+  if have >= c.base + c.units or time() - c.t > WEEK then
+    MarginDB.credits[item] = nil
+    return 0
+  end
+  return c.base + c.units - have
+end
+
+local function credit(item, units)
+  MarginDB.credits = MarginDB.credits or {}
+  local c = MarginDB.credits[item]
+  if c and ns.Transit(item) > 0 then
+    c.units = c.units + units
+    c.t = time()
+  else
+    MarginDB.credits[item] = { base = owned(item), units = units, t = time() }
+  end
+end
+
+local lastConfirm -- the commodity purchase the player just confirmed: { item, qty, t }
+if C_AuctionHouse and C_AuctionHouse.ConfirmCommoditiesPurchase then
+  hooksecurefunc(C_AuctionHouse, "ConfirmCommoditiesPurchase", function(item, qty)
+    item, qty = readable(item), readable(qty)
+    if type(item) == "number" and type(qty) == "number" then
+      lastConfirm = { item = item, qty = qty, t = GetTime() }
+    end
+  end)
+end
+
 local function openItem(item)
   local AH = C_AuctionHouse
   local key = AH.MakeItemKey(item)
@@ -85,10 +121,12 @@ local function compute()
   if not plan then return 0 end
   local cost = 0
   for _, it in ipairs(plan.shop) do
-    local have = owned(it.item)
+    local transit = ns.Transit(it.item)
+    local have = owned(it.item) + transit
     local buy = math.max(0, it.count - have)
     local kind = buy == 0 and "done" or (it.src == "vendor" and "vendor" or "ah")
-    list[#list + 1] = { item = it.item, need = it.count, have = have, buy = buy, unit = it.unit, kind = kind }
+    list[#list + 1] = { item = it.item, need = it.count, have = have, buy = buy, unit = it.unit, kind = kind,
+      transit = transit }
     if it.unit then cost = cost + it.unit * buy end
   end
   local rank = { ah = 1, vendor = 2, done = 3 }
@@ -188,11 +226,12 @@ function ns.RefreshShopping()
       local n = C_Item.GetItemNameByID(d.item)
       if not n then C_Item.RequestLoadItemDataByID(d.item) end
       row.name:SetText(n or ("item " .. d.item))
+      local mail = d.transit > 0 and ("  |cff80c0ff(+%d on the way)|r"):format(d.transit) or ""
       if d.kind == "done" then
-        row.sub:SetText(("need %d, you have %d"):format(d.need, d.have))
+        row.sub:SetText(("|cff60ff60done|r  need %d, have %d%s"):format(d.need, d.have, mail))
         row.name:SetTextColor(0.5, 0.8, 0.5)
       else
-        row.sub:SetText(("buy %d  (need %d, have %d)  %s each"):format(d.buy, d.need, d.have, ns.Money(d.unit)))
+        row.sub:SetText(("buy %d  (need %d, have %d)  %s each%s"):format(d.buy, d.need, d.have, ns.Money(d.unit), mail))
         row.name:SetTextColor(1, 1, 1)
       end
       row.search:SetShown(d.kind == "ah")
@@ -234,7 +273,7 @@ end
 
 local ev = CreateFrame("Frame")
 for _, e in ipairs({ "AUCTION_HOUSE_SHOW", "AUCTION_HOUSE_CLOSED", "COMMODITY_SEARCH_RESULTS_UPDATED",
-  "ITEM_SEARCH_RESULTS_UPDATED", "ITEM_KEY_ITEM_INFO_RECEIVED", "AUCTION_HOUSE_THROTTLED_SYSTEM_READY", "BAG_UPDATE_DELAYED", "GET_ITEM_INFO_RECEIVED" }) do
+  "ITEM_SEARCH_RESULTS_UPDATED", "ITEM_KEY_ITEM_INFO_RECEIVED", "AUCTION_HOUSE_THROTTLED_SYSTEM_READY", "COMMODITY_PURCHASE_SUCCEEDED", "COMMODITY_PURCHASE_FAILED", "MAIL_INBOX_UPDATE", "BAG_UPDATE_DELAYED", "GET_ITEM_INFO_RECEIVED" }) do
   ev:RegisterEvent(e)
 end
 ev:SetScript("OnEvent", function(_, event, a)
@@ -242,6 +281,16 @@ ev:SetScript("OnEvent", function(_, event, a)
     C_Timer.After(0.3, showAtAH)
   elseif event == "AUCTION_HOUSE_THROTTLED_SYSTEM_READY" then
     go()
+  elseif event == "COMMODITY_PURCHASE_SUCCEEDED" then
+    -- the purchase the player confirmed a moment ago went through: tick it off
+    if lastConfirm and GetTime() - lastConfirm.t < 30 then
+      credit(lastConfirm.item, lastConfirm.qty)
+      if MarginDB.debug then ns.Print("[ah] bought", lastConfirm.qty, "of", lastConfirm.item) end
+    end
+    lastConfirm = nil
+    ns.RefreshShopping()
+  elseif event == "COMMODITY_PURCHASE_FAILED" then
+    lastConfirm = nil
   elseif event == "AUCTION_HOUSE_CLOSED" then
     searching, keyWait, pending = {}, nil, nil
     if frame then frame:Hide() end
