@@ -64,6 +64,18 @@ SlashCmdList.MARGIN = function(msg)
     ns.SetOpt("routeTarget", n)
     ns.Print(n and ("route target " .. n) or "route target: profession max")
     if ns.RefreshUI then ns.RefreshUI() end
+  elseif msg == "coverage" then
+    local all = { "Alchemy", "Blacksmithing", "Cooking", "Enchanting", "Engineering", "First Aid",
+      "Leatherworking", "Mining", "Tailoring" }
+    local have, lack = {}, {}
+    for _, n in ipairs(all) do
+      if ns.TRAINER and ns.TRAINER[n] then have[#have + 1] = n else lack[#lack + 1] = n end
+    end
+    ns.Print("trainer recipe data:", table.concat(have, ", "))
+    if #lack > 0 then ns.Print("no trainer data yet for:", table.concat(lack, ", "), "(they still use learned and item-taught recipes)") end
+    for name, p in pairs(ns.Char().profs) do
+      ns.Print(("%s %d/%d: %d learned, %d unlearned considered"):format(name, p.skill, p.max, #p.recipes, #(p.unlearned or {})))
+    end
   elseif msg == "rep" then
     ns.SetOpt("useRep", not ns.Opt("useRep"))
     ns.Print(ns.Opt("useRep") and "using my reputation (discounts seen at vendors, unlocked patterns)"

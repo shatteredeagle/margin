@@ -338,7 +338,9 @@ local function recipeEntry(d, kind, key)
   else
     e.cost = money(d.cost)
     e.sortCost = d.cost
-    if kind == "profit" then
+    if kind == "profit" and not r.out then
+      e.val = "|cff909090makes no item|r" -- enchants and the like have nothing to sell
+    elseif kind == "profit" then
       e.sortVal = key == "ah" and d.ahProfit or d.vendorProfit
       e.val = money(e.sortVal)
     elseif d.perUp then

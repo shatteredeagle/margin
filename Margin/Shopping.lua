@@ -114,6 +114,44 @@ local function search(item, count)
   C_Timer.After(wentBack and 0.3 or 0, go)
 end
 
+-- Margin's own AH search for the items it cannot price: opens each item's buy view in turn
+-- (the same way the Search buttons do), and the results events record the cheapest price.
+-- Used when Auctionator is not installed.
+local scanQ, scanning, scanToken = {}, nil, nil
+local function nextScan()
+  if scanning then return end
+  local item = table.remove(scanQ, 1)
+  if not item then
+    ns.Print("AH search finished.")
+    if ns.InvalidatePlan then ns.InvalidatePlan() end
+    if ns.RefreshUI then ns.RefreshUI() end
+    return
+  end
+  local token = {}
+  scanning, scanToken = item, token
+  search(item, nil)
+  C_Timer.After(6, function() -- an item with no listing may never answer
+    if scanToken == token and scanning == item then scanning = nil; nextScan() end
+  end)
+end
+
+function ns.ScanItems(ids)
+  if not ahOpen() then ns.Print("Open the auction house first."); return end
+  if #ids == 0 then ns.Print("Nothing to look up."); return end
+  scanQ = {}
+  for i, id in ipairs(ids) do scanQ[i] = id end
+  scanning = nil
+  ns.Print(("Searching %d items on the AH..."):format(#scanQ))
+  nextScan()
+end
+
+local function scanArrived(item)
+  if scanning == item then
+    scanning = nil
+    C_Timer.After(0.3, nextScan)
+  end
+end
+
 -- Rows still to buy first (cheapest source is the AH or unknown), then vendor items, then done ones.
 local function compute()
   list = {}
@@ -292,7 +330,7 @@ ev:SetScript("OnEvent", function(_, event, a)
   elseif event == "COMMODITY_PURCHASE_FAILED" then
     lastConfirm = nil
   elseif event == "AUCTION_HOUSE_CLOSED" then
-    searching, keyWait, pending = {}, nil, nil
+    searching, keyWait, pending, scanQ, scanning = {}, nil, nil, {}, nil
     if frame then frame:Hide() end
   elseif event == "COMMODITY_SEARCH_RESULTS_UPDATED" then
     local item = readable(a)
@@ -300,6 +338,7 @@ ev:SetScript("OnEvent", function(_, event, a)
     if type(item) ~= "number" or not AH then return end
     local r = AH.GetCommoditySearchResultInfo(item, 1)
     if type(r) == "table" then ns.NoteAHPrice(item, readable(r.unitPrice)) end
+    scanArrived(item)
     local want = searching[item]
     if not want then return end
     searching[item] = nil
@@ -320,6 +359,7 @@ ev:SetScript("OnEvent", function(_, event, a)
       local buyout = readable(r.buyoutAmount)
       if buyout then ns.NoteAHPrice(item, math.floor(buyout / q)) end
     end
+    scanArrived(item)
   elseif event == "ITEM_KEY_ITEM_INFO_RECEIVED" then
     if keyWait and readable(a) == keyWait and ahOpen() then openItem(keyWait) end
   else

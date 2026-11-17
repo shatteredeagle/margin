@@ -1,7 +1,7 @@
 local _, ns = ...
 
--- A button on the auction house that has Auctionator search only the items Margin
--- cannot price yet (no full scan). Shift-click also searches unpriced results.
+-- A button on the auction house that searches only the items Margin cannot price yet (no
+-- full scan): through Auctionator when it is installed, else with Margin's own search. Shift-click also searches unpriced results.
 local button
 
 local function missing(includeOutputs)
@@ -14,10 +14,14 @@ local function updateText()
 end
 
 local function search(includeOutputs)
+  local ids = missing(includeOutputs)
   local A = Auctionator and Auctionator.API and Auctionator.API.v1
-  if not A or not A.MultiSearchExact then ns.Print("Auctionator search API not found."); return end
+  if not (A and A.MultiSearchExact) then
+    ns.ScanItems(ids) -- no Auctionator: Margin looks the items up itself
+    return
+  end
   local names, loading = {}, 0
-  for _, id in ipairs(missing(includeOutputs)) do
+  for _, id in ipairs(ids) do
     local n = C_Item.GetItemNameByID(id)
     if n then names[#names + 1] = n else loading = loading + 1; C_Item.RequestLoadItemDataByID(id) end
   end
