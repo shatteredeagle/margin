@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Fixed: a recipe that sells for more than it costs could be picked over a reliable one just because its skill-up chance was low (profit divided by a small chance looked huge). Recipes are now ranked with profit only bringing the cost down to zero, and ties go to the more reliable recipe.
+- `/margin dump` writes the route, per-craft costs, shopping list and settings to the save file for bug reports.
+
 - A recipe you just learned shows up straight away (moved from "unlearned" to your recipes) and the profession is re-read a few times as the game updates; with no profession window open, Margin says a new recipe needs a refresh.
 
 - "Margin: N unpriced": only counts patterns for recipes you could actually reach (within your skill cap, with priced reagents), and items already searched in the last 12 hours that still have no listing are no longer counted, so the number drops after a search. Right-click the button to count them again.

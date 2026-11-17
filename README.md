@@ -30,6 +30,7 @@ Updates are new releases. Type `/margin` in game, or use the Margin button on a 
 | `/margin buy`, `/margin list` | toggle the vendor popup / the AH shopping list |
 | `/margin odds worst` | skill-up odds used for planning: `worst` (default) or `typical` |
 | `/margin lock` | toggle keeping the route fixed until you press Re-plan |
+| `/margin dump` | write the route, costs and settings to the save file (for bug reports) |
 | `/margin coverage` | which professions have trainer data |
 | `/margin debug` | print what Margin is doing |
 

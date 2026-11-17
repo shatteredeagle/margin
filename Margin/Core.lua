@@ -88,6 +88,8 @@ SlashCmdList.MARGIN = function(msg)
       if ns.RefreshUI then ns.RefreshUI() end
     end
     ns.Print("skill-up odds:", ns.Opt("odds"), "(/margin odds worst | typical)")
+  elseif msg == "dump" then
+    ns.Dump()
   elseif msg == "lock" then
     ns.SetOpt("routeLock", not ns.Opt("routeLock"))
     ns.Print(ns.Opt("routeLock") and "route locked until you press Re-plan" or "route re-plans whenever prices change")

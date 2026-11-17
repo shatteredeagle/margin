@@ -137,6 +137,10 @@ function ns.Evaluate(prof, profs, includeTrainer)
       chance = chance,
       resale = resale, net = cost - resale, -- reagents minus what the result sells for
       perUp = chance > 0 and (cost - resale) / chance or nil,
+      -- What recipes are ranked by. A craft that sells for more than it costs has a negative net; dividing
+      -- that by a low chance would make it look better the less often it works, so profit only ever
+      -- brings the cost down to zero, and the more reliable recipe wins a tie.
+      rankPer = chance > 0 and math.max(cost - resale, 0) / chance or nil,
     }
   end
   return rows
@@ -171,7 +175,11 @@ function ns.LevelingRows(rows, showAll)
       grey[#grey + 1] = row
     end
   end
-  table.sort(ups, function(a, b) return a.perUp < b.perUp end)
+  table.sort(ups, function(a, b)
+    if a.rankPer ~= b.rankPer then return a.rankPer < b.rankPer end
+    if a.chance ~= b.chance then return a.chance > b.chance end
+    return a.perUp < b.perUp
+  end)
   table.sort(grey, function(a, b) return a.cost < b.cost end)
   for _, row in ipairs(grey) do ups[#ups + 1] = row end
   for _, row in ipairs(unpriced) do ups[#ups + 1] = row end
@@ -290,13 +298,13 @@ local function route(rows, base, start, target, skip, force, byId)
     local pick = force and force[s] and byId[force[s]]
     if pick and pick.missing == 0 and not skip[pick] and not pick.unavailable then
       local ch = chanceAt(pick, base, s) * pick.r.ups
-      if ch > 0 then best, bestPer, bestCh = pick, pick.net / ch, ch end
+      if ch > 0 then best, bestPer, bestCh = pick, math.max(pick.net, 0) / ch, ch end
     end
     for _, row in ipairs(best and {} or rows) do
       if row.missing == 0 and not skip[row] and not row.unavailable then
         local ch = chanceAt(row, base, s) * row.r.ups
         if ch > 0 then
-          local per = row.net / ch
+          local per = math.max(row.net, 0) / ch -- see rankPer in Evaluate
           if not best or per < bestPer or (per == bestPer and ch > bestCh) then
             best, bestPer, bestCh = row, per, ch
           end
@@ -305,12 +313,12 @@ local function route(rows, base, start, target, skip, force, byId)
     end
     if best then
       if cur and cur.row == best then
-        cur.to = s + 1; cur.crafts = cur.crafts + 1 / bestCh; cur.cost = cur.cost + bestPer
+        cur.to = s + 1; cur.crafts = cur.crafts + 1 / bestCh; cur.cost = cur.cost + best.net / bestCh
       else
-        cur = { row = best, from = s, to = s + 1, crafts = 1 / bestCh, cost = bestPer }
+        cur = { row = best, from = s, to = s + 1, crafts = 1 / bestCh, cost = best.net / bestCh }
         segs[#segs + 1] = cur
       end
-      total = total + bestPer
+      total = total + best.net / bestCh
       gross = gross + best.cost / bestCh
       crafts = crafts + 1 / bestCh
     else

@@ -19,6 +19,7 @@ Scan.lua
 Calc.lua
 Progress.lua
 UI.lua
+Dump.lua
 Shopping.lua
 Merchant.lua
 AH.lua

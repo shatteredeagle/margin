@@ -187,4 +187,18 @@ local m1 = ns.MissingItems({ pm }, false, true)
 assert(#m1 == 1 and m1[1] == 61, "only the usable recipe's pattern")
 MarginDB.searched[61] = time()
 assert(#ns.MissingItems({ pm }, false, true) == 0, "recently searched items are not counted again")
+
+-- profit must not make a low-odds recipe look better: a 1.0-chance profitable recipe beats a 0.05 one
+oddsMode = "worst"; resaleMode = "vendor"
+prices[7] = {10, "vendor"}; prices[8] = {10, "vendor"}
+local Lo = { id = 100, out = 9, qty = 1, diff = 2, ups = 1, trivial = 90, reagents = { {item = 7, count = 1} } } -- green: 5%
+local Hi = { id = 101, out = 9, qty = 1, diff = 0, ups = 1, trivial = 90, reagents = { {item = 8, count = 1} } } -- orange: 100%
+local pq = { skill = 10, max = 90, recipes = { Lo, Hi } }
+local rq = ns.Evaluate(pq, { pq })
+assert(rq[1].rankPer == 0 and rq[2].rankPer == 0)
+local lvl = ns.LevelingRows(rq, true)
+assert(lvl[1].r == Hi, "the reliable recipe ranks first")
+local planq = ns.Plan(pq, 12, { pq }, false)
+assert(planq.segs[1].row.r == Hi, "route uses the reliable recipe")
+oddsMode = "typical"; resaleMode = "off"
 print("calc ok")
