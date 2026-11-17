@@ -79,6 +79,8 @@ function ns.Dump()
       out[#out + 1] = ("  %d-%d %s x%d, %s"):format(e.from, e.to, e.name, e.crafts or 0, plain(e.cost))
     end
   end
+  out[#out + 1] = "scan log (newest last):"
+  for _, l in ipairs(MarginDB.scanLog or {}) do out[#out + 1] = "  " .. l end
   MarginDB.dump = out
   ns.Print(("dump written (%d lines). /reload to save it to disk."):format(#out))
 end

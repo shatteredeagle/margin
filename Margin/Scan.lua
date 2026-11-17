@@ -75,13 +75,30 @@ end
 
 -- Reads every learned recipe of the open profession into MarginDB, plus the
 -- unlearned ones a profession trainer teaches (ns.TRAINER) for the route planner.
+-- Every scan attempt leaves a line in MarginDB.scanLog (the last 20), including the ones that give
+-- up and why, so "this profession does not show up" can be answered from the save file.
+local function logScan(why, base, extra)
+  local log = MarginDB.scanLog or {}
+  MarginDB.scanLog = log
+  log[#log + 1] = ("%s %s | name=%s id=%s skill=%s/%s | %s"):format(date("%H:%M:%S"), why,
+    tostring(base and base.professionName), tostring(base and base.professionID),
+    tostring(base and base.skillLevel), tostring(base and base.maxSkillLevel), extra or "")
+  while #log > 20 do table.remove(log, 1) end
+end
+
 function ns.Scan(verbose)
   if not (T and T.IsTradeSkillReady and T.IsTradeSkillReady()) then
     if verbose then ns.Print("Open a profession window first.") end
+    local base = T and T.GetBaseProfessionInfo and T.GetBaseProfessionInfo()
+    -- only worth a line when a window is actually up (a profession is being shown but not ready)
+    if base and base.professionName then logScan("not ready", base) end
     return
   end
   local base = T.GetBaseProfessionInfo()
-  if not base or not base.professionName then return end
+  if not base or not base.professionName or base.professionName == "" then
+    logScan("no profession info", base, "window ready but GetBaseProfessionInfo gave no name")
+    return
+  end
 
   local trainer = ns.TRAINER and ns.TRAINER[base.professionName] or {}
   local C = codex()
@@ -145,6 +162,7 @@ function ns.Scan(verbose)
     graduated = next(graduated) and graduated or nil,
     every = wantAll and every or nil, -- nil when "all recipes" was off at this scan
   }
+  logScan("scanned", base, ("%d ids, %d learned, %d unlearned considered"):format(#T.GetAllRecipeIDs(), #recipes, #unlearned))
   if verbose then
     ns.Print(base.professionName, #recipes, "recipes scanned,", #unlearned - taught, "trainer recipes,",
       taught, "taught by items")
@@ -160,7 +178,17 @@ local pending
 local f = CreateFrame("Frame")
 f:RegisterEvent("TRADE_SKILL_LIST_UPDATE")
 f:RegisterEvent("TRADE_SKILL_SHOW")
-f:SetScript("OnEvent", function()
+f:SetScript("OnEvent", function(_, event)
+  if event == "TRADE_SKILL_SHOW" then
+    -- what the client reports the moment a profession window opens (First Aid, Cooking, ...)
+    MarginDB.scanLog = MarginDB.scanLog or {}
+    local base = T.GetBaseProfessionInfo and T.GetBaseProfessionInfo()
+    local ids = T.GetAllRecipeIDs and T.GetAllRecipeIDs()
+    table.insert(MarginDB.scanLog, ("%s TRADE_SKILL_SHOW | ready=%s name=%s ids=%s frames: Professions=%s TradeSkill=%s"):format(
+      date("%H:%M:%S"), tostring(T.IsTradeSkillReady and T.IsTradeSkillReady()), tostring(base and base.professionName),
+      tostring(ids and #ids), tostring(ProfessionsFrame and ProfessionsFrame:IsShown()), tostring(TradeSkillFrame and TradeSkillFrame:IsShown())))
+    while #MarginDB.scanLog > 20 do table.remove(MarginDB.scanLog, 1) end
+  end
   if pending then return end
   pending = true
   C_Timer.After(0.5, function() pending = nil; ns.Scan(false) end)
