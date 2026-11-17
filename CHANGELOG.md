@@ -1,19 +1,12 @@
 # Changelog
 
-## Unreleased
-
+## 0.1.6-alpha
 - Fixed: items vendors sell in bundles (Mild Spices, water: 5 at a time) bought only part of what was asked, because the buy call takes a number of items, in multiples of the bundle, and Margin passed the number of bundles. They are now bought in whole bundles, and the first purchase of such an item is checked so that a client that counts bundles instead is detected after at most one bundle of extra.
-
 - **Margin's own full AH scan.** A "Full scan" button (and `/margin fullscan`) reads the whole auction house once and records the price and how much is for sale of every item Margin watches (reagents, products, pattern items): no item-by-item lookups. The AH allows one every 15 minutes. Without Auctionator it runs by itself when you open the AH (`/margin autoscan on|off` to change that). When Auctionator is installed its prices are still used, unless Margin's own scan is newer.
-
 - **The AH's supply is now part of the plan.** Margin records how much of an item is actually listed (and at what prices) whenever an AH search shows it. The planner spends each item's supply in skill order and switches to other recipes when it runs out (what you already hold counts), the route says which items limit it, and the shopping lists flag "only N on the AH" and cost the purchase by walking the listings cheapest first instead of assuming the lowest price for every unit. Supply data is kept for 3 days; items never looked at are assumed plentiful, so the AH button ("Margin: N to look up", was "unpriced") now also looks up the route's AH items whose listings it has not seen.
-
 - Fixed: recipe items filed under a different skill line than their profession were ignored (First Aid's manuals use another line number), so those recipes never got a pattern source. The recipe's own profession is what counts now. Forever's own rank and the vendor price Polestar lists are used ahead of the Classic table, and manuals that need more skill than your current cap still show where they come from in the "Recipes: all" view.
-
 - Every scan attempt, including the ones that give up and why, is logged (last 20 in the save file, and in `/margin dump`), so a profession that does not show up can be diagnosed.
-
 - Items that do not exist in Forever (they come from the profession window's full recipe list and the bundled Classic tables) are no longer counted as "unpriced", and recipes whose product is not a Forever item are left out of the Profit tab's "all recipes" view.
-
 - "Margin: N unpriced" now always says what it is doing. When there is nothing to look up it says why (items already searched in the last 12 hours with no listing, or the Scan filter), it reports waiting for item names, skips items the game cannot name instead of waiting for ever, and a run that went quiet no longer blocks the next click.
 
 ## 0.1.5-alpha
