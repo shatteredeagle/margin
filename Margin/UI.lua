@@ -375,21 +375,29 @@ local function routeEntries(plan)
       list[#list + 1] = {
         icon = r.icon, data = seg.row,
         name = ("%d-%d  |cff%s%s|r%s"):format(seg.from, seg.to,
-          r.train and DIFF_COLOR[0] or (DIFF_COLOR[r.diff] or "ffffff"), r.name, r.train and " |cff80c0ff(learn)|r" or ""),
+          seg.row.learn and DIFF_COLOR[0] or (DIFF_COLOR[r.diff] or "ffffff"), r.name,
+          seg.row.learn and " |cff80c0ff(learn)|r" or ""),
         cost = ("~%d crafts"):format(n), sale = money(seg.row.cost), val = money(seg.cost),
       }
     end
   end
   if #plan.learn > 0 then
-    list[#list + 1] = { name = "|cffffd700Learn from a trainer|r", cost = "", sale = "", val = money(plan.learnCost) }
+    list[#list + 1] = { name = "|cffffd700Recipes to learn|r", cost = "", sale = "", val = money(plan.learnCost) }
+    local HOW = { trainer = "trainer", ah = "buy the pattern on the AH", vendor = "buy the pattern from a vendor" }
     for _, l in ipairs(plan.learn) do
       local r = l.row.r
       list[#list + 1] = {
-        icon = r.icon, name = r.name, cost = ("needs skill %d"):format(l.rank), sale = "", val = money(l.fee),
+        icon = r.icon, name = r.name,
+        cost = ("skill %d, %s"):format(l.rank, l.how == "trainer" and "trainer" or (l.how == "ah" and "AH" or "vendor")),
+        sale = "", val = money(l.fee),
         tip = function(tt)
           tt:AddLine(r.name)
-          tt:AddLine(("Trainer fee %s, requires %d skill."):format(money(l.fee), l.rank), 1, 1, 1, true)
-          tt:AddLine("Forever trainer data (EG Link); not every trainer is listed.", 0.7, 0.7, 0.7, true)
+          tt:AddLine(("%s: %s, requires %d skill."):format(HOW[l.how] or l.how, money(l.fee), l.rank), 1, 1, 1, true)
+          if l.how == "trainer" then
+            tt:AddLine("Forever trainer data (EG Link); not every trainer is listed.", 0.7, 0.7, 0.7, true)
+          elseif l.item then
+            tt:AddLine(("Recipe item: %s"):format(itemName(l.item)), 0.7, 0.7, 0.7, true)
+          end
         end,
       }
     end
@@ -427,7 +435,7 @@ local function routeData()
   sel = sel or cards[1]
   local alt = planFor(resale, not trainer)
   cards[#cards + 1] = {
-    label = trainer and "Learned recipes only" or "With trainer recipes",
+    label = trainer and "Learned recipes only" or "With unlearned recipes",
     plan = alt, total = alt.cost + alt.learnCost, selected = false,
     action = function() ns.SetOpt("useTrainer", not trainer); ns.RefreshUI() end,
   }
@@ -461,7 +469,7 @@ redraw = function()
     frame.tSort:SetText("Resale: " .. (ns.Opt("resale") or "vendor"))
   end
   if tab == "route" then
-    frame.tAll:SetText(ns.Opt("useTrainer") and "Trainer recipes: on" or "Trainer recipes: off")
+    frame.tAll:SetText(ns.Opt("useTrainer") and "Unlearned recipes: on" or "Unlearned recipes: off")
   else
     frame.tAll:SetText(showAll and "Show: everything" or "Show: useful only")
   end

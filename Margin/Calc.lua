@@ -72,6 +72,25 @@ function ns.ResaleValue(vend, ah)
   return vend or 0
 end
 
+-- Cheapest way to get a recipe that an item teaches (pattern, plan, recipe): buy the item
+-- on the AH, or from a vendor that has no reputation requirement. nil when nothing is priced.
+function ns.TeachOption(r)
+  local best
+  for _, o in ipairs(r.teach) do
+    local ah, vend = ns.AHPrice(o.item), ns.VendorBuy(o.item)
+    local fee, how
+    if ah and (not vend or ah < vend) then
+      fee, how = ah, "ah"
+    elseif vend and not o.rep then
+      fee, how = vend, "vendor"
+    end
+    if fee and (not best or fee < best.fee) then
+      best = { rank = o.rank, fee = fee, how = how, item = o.item }
+    end
+  end
+  return best
+end
+
 -- One row per craftable recipe with cost, both profit figures and cost per skill-up.
 function ns.Evaluate(prof, profs, includeTrainer)
   local rows = {}
@@ -87,7 +106,15 @@ function ns.Evaluate(prof, profs, includeTrainer)
     local vend, ah = ns.Revenue(r)
     local chance = (CHANCE[r.diff] or 0) * r.ups
     local resale = ns.ResaleValue(vend, ah)
+    local learn, unavailable
+    if r.train then
+      learn = { rank = r.train.rank, fee = r.train.fee, how = "trainer" }
+    elseif r.teach then
+      learn = ns.TeachOption(r)
+      unavailable = learn == nil -- no price for any recipe item that teaches it
+    end
     rows[#rows + 1] = {
+      learn = learn, unavailable = unavailable,
       r = r, cost = cost, lines = lines, missing = missing,
       vendorProfit = vend and (vend - cost) or nil,
       ahProfit = ah and (ah - cost) or nil,
@@ -137,7 +164,7 @@ end
 
 -- Items Margin cannot price at all (reagents, or with includeOutputs the results
 -- of recipes that have no AH price), as a list of item IDs.
-function ns.MissingItems(profs, includeOutputs)
+function ns.MissingItems(profs, includeOutputs, includeRecipes)
   local idx = craftIndex(profs)
   local out, seen = {}, {}
   local function add(id)
@@ -149,6 +176,12 @@ function ns.MissingItems(profs, includeOutputs)
         if not ns.UnitPrice(rg.item, idx) then add(rg.item) end
       end
       if includeOutputs and r.out and not ns.AHPrice(r.out) then add(r.out) end
+    end
+    -- recipe items (patterns, plans) that teach an unlearned craft and have no price yet
+    for _, r in ipairs(includeRecipes and prof.unlearned or {}) do
+      if r.teach and not ns.TeachOption(r) then
+        for _, o in ipairs(r.teach) do if o.rank <= (prof.max or 0) then add(o.item) end end
+      end
     end
   end
   return out
@@ -188,10 +221,11 @@ end
 -- Skill-up chance of row.r at skill s for the route. Learned recipes use the
 -- difficulty seen at the scanned skill; trainer recipes start orange at the rank
 -- the trainer needs and are unavailable before it.
-local function chanceAt(r, s0, s)
-  if r.train then
-    if s < r.train.rank then return 0 end
-    return ns.RouteChance(r, r.train.rank, s)
+local function chanceAt(row, s0, s)
+  local r = row.r
+  if row.learn then
+    if s < row.learn.rank then return 0 end
+    return ns.RouteChance(r, row.learn.rank, s)
   end
   return ns.RouteChance(r, s0, s)
 end
@@ -205,8 +239,8 @@ local function route(rows, s0, target, skip)
   for s = s0, target - 1 do
     local best, bestPer, bestCh
     for _, row in ipairs(rows) do
-      if row.missing == 0 and not skip[row] then
-        local ch = chanceAt(row.r, s0, s) * row.r.ups
+      if row.missing == 0 and not skip[row] and not row.unavailable then
+        local ch = chanceAt(row, s0, s) * row.r.ups
         if ch > 0 then
           local per = row.net / ch
           if not best or per < bestPer or (per == bestPer and ch > bestCh) then
@@ -251,14 +285,14 @@ function ns.Plan(prof, target, profs, useTrainer)
     segs, total, crafts, gross = route(rows, s0, target, skip)
     local used = {}
     for _, seg in ipairs(segs) do
-      if not seg.gap and seg.row.r.train then used[seg.row] = true end
+      if not seg.gap and seg.row.learn then used[seg.row] = true end
     end
     local worst, worstNet
     for row in pairs(used) do
       skip[row] = true
       local _, alt = route(rows, s0, target, skip)
       skip[row] = nil
-      local net = alt - total - row.r.train.fee -- what dropping this recipe would save
+      local net = alt - total - row.learn.fee -- what dropping this recipe would save
       if net < 0 and (not worstNet or net < worstNet) then worst, worstNet = row, net end
     end
     if not worst then break end
@@ -267,12 +301,13 @@ function ns.Plan(prof, target, profs, useTrainer)
 
   local learn, learnCost = {}, 0
   for _, seg in ipairs(segs) do
-    if not seg.gap and seg.row.r.train then
+    if not seg.gap and seg.row.learn then
       local seen = false
       for _, l in ipairs(learn) do if l.row == seg.row then seen = true end end
       if not seen then
-        learn[#learn + 1] = { row = seg.row, rank = seg.row.r.train.rank, fee = seg.row.r.train.fee }
-        learnCost = learnCost + seg.row.r.train.fee
+        local L = seg.row.learn
+        learn[#learn + 1] = { row = seg.row, rank = L.rank, fee = L.fee, how = L.how, item = L.item }
+        learnCost = learnCost + L.fee
       end
     end
   end
@@ -289,6 +324,11 @@ function ns.Plan(prof, target, profs, useTrainer)
     if unit then shopCost = shopCost + unit * n end
   end
   table.sort(shop, function(a, b) return (a.unit or 0) * a.count > (b.unit or 0) * b.count end)
+  for _, l in ipairs(learn) do
+    if l.how ~= "trainer" and l.item then
+      shop[#shop + 1] = { item = l.item, count = 1, unit = l.fee, src = l.how, recipe = true }
+    end
+  end
   return { segs = segs, cost = total, gross = gross, crafts = crafts, shop = shop, shopCost = shopCost,
     target = target, learn = learn, learnCost = learnCost }
 end

@@ -35,6 +35,12 @@ function ns.BuyPrice(itemID)
   return nil
 end
 
+-- What a vendor charges for an item, from Auctionator's merchant cache or the bundled table.
+function ns.VendorBuy(itemID)
+  local A = Auctionator and Auctionator.API and Auctionator.API.v1
+  return A and vendorBuy(A, itemID) or nil
+end
+
 function ns.AHPrice(itemID)
   local A = Auctionator and Auctionator.API and Auctionator.API.v1
   return A and (A.GetAuctionPriceByItemID(API, itemID) or ns.Observed(itemID)) or nil

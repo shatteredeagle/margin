@@ -4,7 +4,8 @@ local ns = { Opt = function(k) if k == "resale" then return resaleMode end retur
 local prices = { [1] = {10, "vendor"}, [2] = {50, "ah"} }
 ns.VENDOR_SEED = {}
 ns.BuyPrice = function(id) local p = prices[id]; if p then return p[1], p[2] end end
-ns.AHPrice = function(id) return id == 9 and 1000 or nil end
+ns.AHPrice = function(id) if id == 9 then return 1000 elseif id == 50 then return 200 end end
+ns.VendorBuy = function(id) return nil end
 ns.VendorSell = function(id) return id == 9 and 300 or nil end
 assert(loadfile("Margin/Calc.lua"))("Margin", ns)
 
@@ -91,4 +92,31 @@ assert(plv.segs[1].row.r == V, "net-best recipe wins")
 assert(plv.cost == -400 and plv.gross == 200, plv.cost) -- 2 pts: net -200 each, gross 100 each
 resaleMode = "off"
 assert(ns.Plan(pv, 12, { pv }, false).segs[1].row.r == W, "off: gross-cheapest wins")
+
+-- recipes taught by an item: pattern item 50 is on the AH for 200c
+resaleMode = "off"
+local T2 = { id = 20, out = 32, qty = 1, diff = 0, ups = 1, trivial = 40, reagents = { {item = 1, count = 1} },
+  teach = { { item = 50, rank = 12, rep = false } } }
+local pt2 = { skill = 10, max = 40, recipes = { L }, unlearned = { T2 } }
+local pl = ns.Plan(pt2, 20, { pt2 }, true)
+assert(#pl.learn == 1 and pl.learn[1].how == "ah" and pl.learn[1].fee == 200 and pl.learn[1].item == 50)
+local hasRecipeItem
+for _, it in ipairs(pl.shop) do if it.recipe and it.item == 50 then hasRecipeItem = true end end
+assert(hasRecipeItem, "recipe item on the shopping list")
+assert(pl.cost == 200 + 80 and pl.learnCost == 200)
+-- no price for the pattern: recipe unavailable, route stays on the learned recipe
+T2.teach[1].item = 51
+local pl2 = ns.Plan(pt2, 20, { pt2 }, true)
+assert(#pl2.learn == 0 and pl2.cost == 1000)
+-- and the AH search list asks for the pattern item
+local miss = ns.MissingItems({ pt2 }, false, true)
+local found51 = false
+for _, id in ipairs(miss) do if id == 51 then found51 = true end end
+assert(found51)
+-- a reputation-locked vendor pattern with no AH price stays unavailable
+ns.VendorBuy = function(id) if id == 52 then return 300 end end
+T2.teach = { { item = 52, rank = 12, rep = true } }
+assert(ns.TeachOption(T2) == nil)
+T2.teach[1].rep = false
+assert(ns.TeachOption(T2).how == "vendor")
 print("calc ok")

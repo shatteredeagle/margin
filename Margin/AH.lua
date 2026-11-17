@@ -5,7 +5,7 @@ local _, ns = ...
 local button
 
 local function missing(includeOutputs)
-  return ns.MissingItems(ns.Char().profs, includeOutputs)
+  return ns.MissingItems(ns.Char().profs, includeOutputs, ns.Opt("useTrainer"))
 end
 
 local function updateText()
