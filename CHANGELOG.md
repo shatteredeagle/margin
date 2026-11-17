@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Profit tab: a "Recipes: known / all" button. "All" lists every recipe of the profession with what it would earn; unlearned ones are blue and say where you would learn them (trainer fee, pattern price) or that the source is unknown. The full list is read from the open profession window the first time you switch to it.
+- Profit tab: a "Recipes: known / all" button. "All" lists every recipe of the profession with what it would earn; unlearned ones are blue and say where you would learn them (trainer fee, pattern price) and how many skill points you still need, or that the source is unknown. The full list is read from the open profession window the first time you switch to it.
 
 - Fixed: a recipe that sells for more than it costs could be picked over a reliable one just because its skill-up chance was low (profit divided by a small chance looked huge). Recipes are now ranked with profit only bringing the cost down to zero, and ties go to the more reliable recipe.
 - `/margin dump` writes the route, per-craft costs, shopping list and settings to the save file for bug reports.

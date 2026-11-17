@@ -477,8 +477,11 @@ local function recipeEntry(d, kind, key)
   if unlearned then
     local L = d.learn
     if L then
-      how = (" |cff80c0ff(learn: %s)|r"):format(L.how == "trainer" and ("trainer " .. money(L.fee))
-        or (L.how == "ah" and ("pattern " .. money(L.fee) .. " on the AH") or ("pattern " .. money(L.fee))))
+      local mine = (ns.Char().profs[profName] or {}).skill or 0
+      local when = L.rank <= mine and "learn now" or ("|cffffd070skill %d, %d to go|r|cff80c0ff"):format(L.rank, L.rank - mine)
+      local source = L.how == "trainer" and ("trainer " .. money(L.fee))
+        or (L.how == "ah" and ("pattern " .. money(L.fee) .. " on the AH") or ("pattern " .. money(L.fee)))
+      how = (" |cff80c0ff(%s: %s)|r"):format(when, source)
     elseif r.teach then
       how = " |cff909090(pattern not priced)|r"
     else
