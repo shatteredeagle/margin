@@ -95,3 +95,61 @@ f:SetScript("OnEvent", function(_, event, unit, _, spellID)
     end
   end
 end)
+
+---------------------------------------------------------------------------
+-- A newly learned recipe shows up without reopening anything by hand
+---------------------------------------------------------------------------
+
+local function windowReady()
+  return C_TradeSkillUI and C_TradeSkillUI.IsTradeSkillReady and C_TradeSkillUI.IsTradeSkillReady()
+end
+
+-- Re-read the open profession a few times: the game's own list can take a moment to say "learned".
+-- With no profession window open there is nothing to read, so the window shows a hint instead and
+-- the next time you open one it is read as usual.
+function ns.ScheduleRescan()
+  for _, delay in ipairs({ 0.5, 2, 5 }) do
+    C_Timer.After(delay, function() if windowReady() then ns.Scan(false) end end)
+  end
+  if ns.RefreshUI then ns.RefreshUI() end
+end
+
+-- A recipe was learned (id known): move it from "unlearned" to "learned" straight away, using what
+-- was scanned for it, and have the profession re-read to get its real colour.
+function ns.RecipeLearned(recipeID)
+  for _, prof in pairs(ns.Char().profs) do
+    for i, r in ipairs(prof.unlearned or {}) do
+      if r.id == recipeID then
+        table.remove(prof.unlearned, i)
+        r.train, r.teach, r.diff, r.learnedAt = nil, nil, 0, time() -- orange until the next scan says otherwise
+        prof.recipes[#prof.recipes + 1] = r
+        prof.graduated = prof.graduated or {}
+        prof.graduated[recipeID] = r
+        prof.dirty = true
+        if ns.InvalidatePlan then ns.InvalidatePlan() end
+        return ns.ScheduleRescan()
+      end
+    end
+  end
+  -- not one we had seen: we cannot say which profession it is, so any may need a re-read
+  for _, prof in pairs(ns.Char().profs) do prof.dirty = true end
+  ns.ScheduleRescan()
+end
+
+local learn = CreateFrame("Frame")
+for _, e in ipairs({ "NEW_RECIPE_LEARNED", "LEARNED_SPELL_IN_SKILL_LINE", "TRADE_SKILL_DATA_SOURCE_CHANGED", "SPELLS_CHANGED" }) do
+  pcall(learn.RegisterEvent, learn, e) -- not every client has every one
+end
+local spellsQueued
+learn:SetScript("OnEvent", function(_, event, a)
+  if event == "NEW_RECIPE_LEARNED" and type(a) == "number" and not (issecretvalue and issecretvalue(a)) then
+    ns.RecipeLearned(a)
+  elseif event == "LEARNED_SPELL_IN_SKILL_LINE" and type(a) == "number" and not (issecretvalue and issecretvalue(a)) then
+    ns.RecipeLearned(a) -- the spell is the recipe's craft spell
+  elseif event == "SPELLS_CHANGED" or event == "TRADE_SKILL_DATA_SOURCE_CHANGED" then
+    -- fires for many reasons: only worth a re-read when a profession window is open
+    if spellsQueued or not windowReady() then return end
+    spellsQueued = true
+    C_Timer.After(2, function() spellsQueued = nil; if windowReady() then ns.Scan(false) end end)
+  end
+end)

@@ -112,12 +112,23 @@ function ns.Scan(verbose)
 
   local before = ns.Char().profs[base.professionName]
   local oldSkill = before and before.skill
+  -- recipes learned a moment ago can be missing from the game's list for a few seconds: keep them
+  local graduated = {}
+  for id, r in pairs(before and before.graduated or {}) do
+    local seen = false
+    for _, x in ipairs(recipes) do if x.id == id then seen = true; break end end
+    if not seen and time() - (r.learnedAt or 0) < 600 then
+      recipes[#recipes + 1] = r
+      graduated[id] = r
+    end
+  end
   for _, r in ipairs(recipes) do r.prof = base.professionName end
   for _, r in ipairs(unlearned) do r.prof = base.professionName end
   ns.Char().profs[base.professionName] = {
     id = base.professionID, skill = base.skillLevel, max = base.maxSkillLevel, scanSkill = base.skillLevel,
     time = time(), recipes = recipes, unlearned = unlearned,
     codex = C ~= nil, taught = taught, -- Polestar present / recipes taught by items found
+    graduated = next(graduated) and graduated or nil,
   }
   if verbose then
     ns.Print(base.professionName, #recipes, "recipes scanned,", #unlearned - taught, "trainer recipes,",

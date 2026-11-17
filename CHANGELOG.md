@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- A recipe you just learned shows up straight away (moved from "unlearned" to your recipes) and the profession is re-read a few times as the game updates; with no profession window open, Margin says a new recipe needs a refresh.
+
 - "Margin: N unpriced": only counts patterns for recipes you could actually reach (within your skill cap, with priced reagents), and items already searched in the last 12 hours that still have no listing are no longer counted, so the number drops after a search. Right-click the button to count them again.
 
 - Planning now uses worst-case skill-up odds by default: yellow recipes count as 25%, green as 5%, and colours are assumed to fade sooner, so the craft counts and shopping list do not come up short on bad luck. `/margin odds typical` switches back to the usual 75% / 25%.

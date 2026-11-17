@@ -751,7 +751,8 @@ redraw = function()
       for _, d in ipairs(rows) do if d.missing == 0 then priced = priced + 1 end end
       frame.info:SetText(("%s %d/%d  -  %d recipes, %d priced, %d shown%s"):format(
         profName, prof.skill, prof.max, #prof.recipes, priced, #list,
-        tab == "level" and ("  |cff909090%s odds|r"):format(ns.Opt("odds") == "typical" and "typical" or "worst-case") or ""))
+        (tab == "level" and ("  |cff909090%s odds|r"):format(ns.Opt("odds") == "typical" and "typical" or "worst-case") or "")
+          .. (prof.dirty and "  |cffffd070new recipe: open the profession window to refresh|r" or "")))
     end
   else
     frame.info:SetText("Open a profession window once to scan it.")
