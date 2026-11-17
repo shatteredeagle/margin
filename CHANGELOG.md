@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- The route no longer redraws on every craft: bag changes are batched over two seconds, ignored while no Margin window is open, and only redraw when the count of an item the route actually uses has changed.
+
 ## 0.1.6-alpha
 - Fixed: items vendors sell in bundles (Mild Spices, water: 5 at a time) bought only part of what was asked, because the buy call takes a number of items, in multiples of the bundle, and Margin passed the number of bundles. They are now bought in whole bundles, and the first purchase of such an item is checked so that a client that counts bundles instead is detected after at most one bundle of extra.
 - **Margin's own full AH scan.** A "Full scan" button (and `/margin fullscan`) reads the whole auction house once and records the price and how much is for sale of every item Margin watches (reagents, products, pattern items): no item-by-item lookups. The AH allows one every 15 minutes. Without Auctionator it runs by itself when you open the AH (`/margin autoscan on|off` to change that). When Auctionator is installed its prices are still used, unless Margin's own scan is newer.

@@ -154,15 +154,45 @@ learn:SetScript("OnEvent", function(_, event, a)
   end
 end)
 
--- Items you craft or buy change what is left to make and buy, so the route follows your bags.
-local bagsQueued
+-- Items you craft or buy change what is left to make and buy, so the route follows your bags. But every
+-- craft touches the bags, and most of those changes do not matter to the route, so:
+--  * nothing is redrawn while no Margin window is open (the plan is just marked stale);
+--  * a redraw only happens when the count of an item the route actually uses has changed;
+--  * and changes are batched over two seconds.
+local bagsQueued, lastSig
+local function openWindow()
+  for _, name in ipairs({ "MarginFrame", "MarginShopping", "MarginMerchant" }) do
+    local f = _G[name]
+    if f and f:IsShown() then return true end
+  end
+end
+
+local function bagSignature()
+  local plan = ns.CurrentPlan()
+  if not plan then return "" end
+  local parts = {}
+  for _, it in ipairs(plan.shop) do parts[#parts + 1] = it.item .. ":" .. ns.Owned(it.item) end
+  for _, seg in ipairs(plan.segs) do
+    for _, p in ipairs(seg.prep or {}) do parts[#parts + 1] = p.item .. ":" .. ns.Owned(p.item) end
+  end
+  return table.concat(parts, ",")
+end
+
 local bagFrame = CreateFrame("Frame")
 bagFrame:RegisterEvent("BAG_UPDATE_DELAYED")
 bagFrame:SetScript("OnEvent", function()
   if bagsQueued then return end
   bagsQueued = true
-  C_Timer.After(1, function()
+  C_Timer.After(2, function()
     bagsQueued = nil
+    if not openWindow() then
+      if ns.InvalidatePlan then ns.InvalidatePlan() end -- recomputed when a window is next opened
+      lastSig = nil
+      return
+    end
+    local sig = bagSignature()
+    if sig == lastSig then return end -- nothing the route uses has changed
+    lastSig = sig
     if ns.RefreshUI then ns.RefreshUI() end
   end)
 end)
