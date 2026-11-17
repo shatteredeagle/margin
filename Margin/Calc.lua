@@ -191,11 +191,11 @@ end
 
 -- Items Margin cannot price at all (reagents, or with includeOutputs the results
 -- of recipes that have no AH price), as a list of item IDs.
-function ns.MissingItems(profs, includeOutputs, includeRecipes, includeAll, only)
+function ns.MissingItems(profs, includeOutputs, includeRecipes, includeAll, only, ignoreSearched)
   local idx = craftIndex(profs)
   local out, seen = {}, {}
   local recent = time() - 12 * 3600
-  local searched = MarginDB and MarginDB.searched or {}
+  local searched = (not ignoreSearched and MarginDB and MarginDB.searched) or {}
   local function add(id)
     -- an item looked up in the last 12 hours that still has no price has no listing: do not nag
     if id and not seen[id] and not (searched[id] and searched[id] > recent) then

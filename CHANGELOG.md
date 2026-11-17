@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- "Margin: N unpriced" now always says what it is doing. When there is nothing to look up it says why (items already searched in the last 12 hours with no listing, or the Scan filter), it reports waiting for item names, skips items the game cannot name instead of waiting for ever, and a run that went quiet no longer blocks the next click.
+
 ## 0.1.5-alpha
 - "Margin: N unpriced" now keeps going: when a round of 60 finishes it pauses a moment and starts the next, until nothing unpriced is left (30 rounds at most, then click again). Click the button while it runs to stop it. It listens for Auctionator's "search ended" announcement, so without that it falls back to one round per click.
 - AH: a "Scan:" button next to the other AH buttons limits "Margin: N unpriced" (the count and the search) to one profession, or all of them. Click it to cycle.

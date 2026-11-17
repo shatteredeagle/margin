@@ -289,4 +289,11 @@ assert(#both == 2)
 local onlyA = ns.MissingItems({ A = pa, B = pb }, false, false, false, "A")
 assert(#onlyA == 1 and onlyA[1] == 880)
 MarginDB = nil
+
+-- the searched-recently memory can be ignored to explain an empty list
+MarginDB = { searched = { [880] = time() } }
+local pz = { skill = 10, max = 60, recipes = { { id = 320, out = 321, qty = 1, diff = 0, ups = 1, trivial = 50, reagents = { {item = 880, count = 1} } } } }
+assert(#ns.MissingItems({ Z = pz }, false, false, false) == 0)
+assert(#ns.MissingItems({ Z = pz }, false, false, false, nil, true) == 1)
+MarginDB = nil
 print("calc ok")

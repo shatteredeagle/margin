@@ -23,7 +23,9 @@ end
 -- left (or MAX_ROUNDS, or you click the button again to stop it). Each round waits for the previous
 -- search to finish, then pauses a moment, so the AH is never hammered.
 local running, runToken, awaiting, rounds, runOutputs = false, nil, nil, 0, false
+local lastProgress = 0 -- GetTime() of the last round start: a run that went quiet is not "running" for ever
 local MAX_ROUNDS = 30
+local nameTries = 0
 local PAUSE = 1.5
 
 local function updateText()
@@ -89,8 +91,13 @@ startRound = function()
   if not running then return end
   if not ahOpen() then return stop() end
   rounds = rounds + 1
+  lastProgress = GetTime()
   local ids = missing(runOutputs)
-  if #ids == 0 then return stop("AH lookup finished: nothing unpriced is left to look up.") end
+  if #ids == 0 then
+    stop()
+    if rounds == 1 then return explainEmpty(runOutputs) end
+    return ns.Print("AH lookup finished: nothing unpriced is left to look up.")
+  end
   if rounds > MAX_ROUNDS then return stop("AH lookup paused after " .. MAX_ROUNDS .. " rounds. Click again to continue.") end
   local more = math.max(0, #ids - ROUND)
   for i = #ids, ROUND + 1, -1 do ids[i] = nil end
@@ -110,11 +117,20 @@ startRound = function()
     local n = C_Item.GetItemNameByID(id)
     if n then names[#names + 1] = n; sent[#sent + 1] = id else loading = loading + 1; C_Item.RequestLoadItemDataByID(id) end
   end
-  if #names == 0 then -- names are still loading: look again shortly
-    if rounds > 6 then return stop("Item names are not loading; try again in a moment.") end
+  if #names == 0 then -- names are still loading: look again shortly, and give up on ones that never load
+    nameTries = nameTries + 1
+    if nameTries > 3 then
+      markSearched(ids) -- the game cannot name them; do not wait on them for ever
+      nameTries = 0
+      ns.Print(("Skipped %d items the game could not give names for."):format(#ids))
+      C_Timer.After(0.2, function() if token == runToken and running then startRound() end end)
+      return
+    end
+    ns.Print(("Waiting for %d item names to load..."):format(loading))
     C_Timer.After(2, function() if token == runToken and running then startRound() end end)
     return
   end
+  nameTries = 0
   local ok, err = pcall(A.MultiSearchExact, "Margin", names)
   if not ok then return stop("Search failed: " .. tostring(err)) end
   markSearched(sent)
@@ -129,8 +145,24 @@ startRound = function()
   end
 end
 
+-- Say why there is nothing to do, instead of doing nothing.
+local function explainEmpty(includeOutputs)
+  local profs = ns.Char().profs
+  local all = ns.MissingItems(profs, includeOutputs, ns.Opt("useTrainer"), ns.Opt("profitScope") == "all",
+    scanProfession(), true)
+  local only = scanProfession()
+  if #all == 0 then
+    ns.Print(only and ("Nothing unpriced for " .. only .. ". (Scan: button cycles professions.)")
+      or "Nothing unpriced: every recipe you have is priced.")
+  else
+    ns.Print(("Nothing to look up: %d unpriced items were already searched in the last 12 hours and have no listing%s."):format(
+      #all, only and (" (" .. only .. " only)") or ""))
+    ns.Print("Right-click the button to count them again.")
+  end
+end
+
 local function search(includeOutputs)
-  if running then return stop("Stopped.") end
+  if running and GetTime() - lastProgress < 150 then return stop("Stopped.") end
   running, rounds, runOutputs = true, 0, includeOutputs and true or false
   updateText()
   startRound()
