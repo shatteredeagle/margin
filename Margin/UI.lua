@@ -121,14 +121,19 @@ end
 
 -- Open a recipe in the game's own profession window with the number to craft filled in.
 -- Opens that profession first when it is not the one showing. Crafting itself stays your click.
-local function setCraftCount(count)
+--
+-- Two things make this flaky if done once and blindly: a window that has just opened loads its
+-- list afterwards and resets to the first recipe, and the quantity box resets whenever the
+-- recipe changes. So: select until the window reports the right recipe, then fill the number,
+-- and fill it again a moment later. The box also refuses more than your materials allow, so
+-- when it settles on less than the route wants, say so.
+local function debugPrint(...)
+  if MarginDB and MarginDB.debug then ns.Print("[open]", ...) end
+end
+
+local function quantityBox()
   local page = ProfessionsFrame and ProfessionsFrame.CraftingPage
-  local box = page and page.CreateMultipleInputBox
-  if box and box.SetValue and count then
-    box:SetValue(count)
-    return true
-  end
-  return false
+  return page and page.CreateMultipleInputBox
 end
 
 -- The recipe the profession window is showing now, or nil when it cannot be told.
@@ -139,28 +144,44 @@ local function selectedRecipe()
   return ok and info and info.recipeID or nil
 end
 
+local function fillCount(count, announce)
+  local box = quantityBox()
+  if not (box and box.SetValue and count) then return false end
+  pcall(box.SetValue, box, count)
+  local got = box.GetValue and box:GetValue()
+  debugPrint("quantity set to", count, "box shows", tostring(got))
+  if announce and type(got) == "number" and got < count then
+    ns.Print(("The window set %d: it only lets you queue what your materials allow (the route wants %d)."):format(got, count))
+  end
+  return true
+end
+
 function ns.OpenRecipe(id, count, professionName)
   local T = C_TradeSkillUI
   if not (T and T.OpenRecipe) then ns.Print("This client has no profession window API."); return end
 
-  -- A window that has only just opened loads its list afterwards and resets to the first recipe,
-  -- so select the recipe, look at what is selected, and try again until it is the one we want.
-  local attempts = 0
   local function select()
-    attempts = attempts + 1
-    if T.IsDataSourceChanging and T.IsDataSourceChanging() and attempts < 25 then
-      return C_Timer.After(0.2, select) -- still loading: not yet
-    end
-    pcall(T.OpenRecipe, id)
-    C_Timer.After(0.35, function()
+    local started, announced = GetTime(), false
+    local ticker
+    ticker = C_Timer.NewTicker(0.25, function()
       local sel = selectedRecipe()
-      if sel ~= nil and sel ~= id and attempts < 10 then
-        return select() -- the window reset to its top recipe: again
+      local elapsed = GetTime() - started
+      if T.IsDataSourceChanging and T.IsDataSourceChanging() and elapsed < 5 then return end -- still loading
+      if sel == id or (sel == nil and elapsed > 1.2) then
+        -- right recipe (or the window will not say, so give it a moment): fill the number, twice
+        ticker:Cancel()
+        if not fillCount(count, false) and count and not announced then
+          ns.Print(("Craft %d of it (the window has no quantity box here)."):format(count))
+        end
+        C_Timer.After(0.5, function() fillCount(count, true) end)
+        debugPrint("recipe", id, "selected:", tostring(sel), "after", ("%.1fs"):format(elapsed))
+      elseif elapsed > 6 then
+        ticker:Cancel()
+        ns.Print("Could not select that recipe in the window. Pick it by hand.")
+        debugPrint("gave up; the window shows", tostring(sel))
+      else
+        pcall(T.OpenRecipe, id) -- not there yet, or reset to the top of the list: ask again
       end
-      if not setCraftCount(count) and count then
-        ns.Print(("Craft %d of it (the window has no quantity box here)."):format(count))
-      end
-      if MarginDB and MarginDB.debug then ns.Print("[open] recipe", id, "selected", tostring(sel), "after", attempts, "tries") end
     end)
   end
 
@@ -175,8 +196,10 @@ function ns.OpenRecipe(id, count, professionName)
   local tries = 0
   local function wait()
     tries = tries + 1
-    if showing() then return C_Timer.After(0.4, select) end -- give the list a moment to load
-    if tries < 14 then return C_Timer.After(0.25, wait) end
+    if showing() and ProfessionsFrame and ProfessionsFrame:IsShown() then
+      return C_Timer.After(0.4, select) -- give the list a moment to load
+    end
+    if tries < 16 then return C_Timer.After(0.25, wait) end
     ns.Print(("Open your %s window first, then click again."):format(professionName or "profession"))
   end
   C_Timer.After(0.25, wait)
