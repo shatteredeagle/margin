@@ -94,6 +94,8 @@ function ns.TeachOption(r)
     -- reputation" it counts once your standing with that faction is high enough.
     local vendorOK = not o.rep
       or (ns.Opt("useRep") and o.repFaction and o.repStanding and (ns.RepStanding(o.repFaction) or 0) >= o.repStanding)
+    -- the price Polestar lists for the vendor that sells it counts as a vendor price too
+    if o.vendorPrice and (not vend or o.vendorPrice < vend) then vend = o.vendorPrice end
     local fee, how
     if ah and (not vend or ah < vend) then
       fee, how = ah, "ah"

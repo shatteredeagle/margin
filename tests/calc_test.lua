@@ -305,4 +305,13 @@ local found = ns.MissingItems({ N = pn2 }, false, false, false)
 assert(#found == 1 and found[1] == 880, "the item that does not exist is left out")
 ns.ItemExists = nil
 MarginDB = nil
+
+-- a pattern with a known vendor price (from Polestar) is priced without ever being seen on the AH
+ns.AHPrice = function(id) return nil end
+ns.VendorBuy = function(id) return nil end
+local mv = { teach = { { item = 61000, rank = 140, rep = false, vendorPrice = 2200 } } }
+local ov = ns.TeachOption(mv)
+assert(ov and ov.how == "vendor" and ov.fee == 2200 and ov.rank == 140)
+mv.teach[1].rep = true
+assert(ns.TeachOption(mv) == nil, "a reputation-locked vendor pattern is still out of reach")
 print("calc ok")

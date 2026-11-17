@@ -38,39 +38,44 @@ local function codex()
   return C
 end
 
--- The recipe items that teach craft `id` in this profession: { item, rank, rep }. The rank comes
--- from the item's tooltip (Forever's own number) when loaded, else the bundled Era rank.
+-- The recipe items that teach craft `id`: { item, rank, rep, vendorPrice }. The recipe is already
+-- known to be this profession's (it came from its window), so the item's own skill-line number is not
+-- checked: Forever files some of them under another line (First Aid's manuals use 2942, not 129).
+-- Forever's own data (Polestar's Codex, the item tooltip) comes first; the bundled Classic table fills in.
+-- Items needing more skill than your cap go in `later`, kept only to show where a recipe comes from.
 local missingTips = 0
 local function teachOptions(C, id, base)
-  local out, seen = {}, {}
-  local function add(itemID, fallbackRank, repHint)
+  local out, later, seen = {}, {}, {}
+  local function add(itemID, fallbackRank, repHint, vendorPrice)
     if seen[itemID] then return end
     seen[itemID] = true
     local info = ns.RecipeItemInfo(itemID, base.professionName)
     if not info then missingTips = missingTips + 1 end
     local rank = info and (info.rank or 0) or fallbackRank or 0
-    -- a pattern you cannot learn before your skill cap is not part of any route you can walk now.
-    -- (A rank taken from the Era table can be up to ~25 higher than Forever's, so allow some slack.)
-    if rank > (base.maxSkillLevel or 0) + (info and 0 or 30) then return end
-    out[#out + 1] = {
+    local o = {
       item = itemID, rank = rank,
       rep = info and info.rep or repHint or false,
       repFaction = info and info.repFaction, repStanding = info and info.repStanding,
+      vendorPrice = vendorPrice,
     }
-  end
-  for _, t in ipairs(ns.TAUGHT and ns.TAUGHT[id] or {}) do
-    if t[2] == base.professionID then add(t[1], t[3]) end
+    -- a rank taken from a table (not the tooltip) can be off, so allow some slack before calling it out of reach
+    if rank > (base.maxSkillLevel or 0) + (info and 0 or 30) then later[#later + 1] = o else out[#out + 1] = o end
   end
   if C then
     local ok, items = pcall(C.RecipeItems, id)
     for _, itemID in ipairs(ok and type(items) == "table" and items or {}) do
       local ok2, rec = pcall(C.Item, itemID)
-      if ok2 and type(rec) == "table" and rec.reqSkill == base.professionID and rec.status ~= "retired" then
-        add(itemID, rec.reqSkillRank, rec.repFaction ~= nil)
+      if ok2 and type(rec) == "table" and rec.status ~= "retired" then
+        local price
+        for _, src in ipairs(rec.sources or {}) do
+          if src.type == "vendor" and src.cost and src.cost > 0 and (not price or src.cost < price) then price = src.cost end
+        end
+        add(itemID, rec.reqSkillRank, rec.repFaction ~= nil, price)
       end
     end
   end
-  return out
+  for _, t in ipairs(ns.TAUGHT and ns.TAUGHT[id] or {}) do add(t[1], t[3]) end
+  return out, later
 end
 
 -- Reads every learned recipe of the open profession into MarginDB, plus the
@@ -119,7 +124,7 @@ function ns.Scan(verbose)
         r.train = { rank = trainer[id][1], fee = trainer[id][2] }
         unlearned[#unlearned + 1] = r
       elseif (info.maxTrivialLevel or 0) > (base.skillLevel or 0) then
-        local opts = teachOptions(C, id, base)
+        local opts, later = teachOptions(C, id, base)
         if #opts > 0 then
           local r = makeRecipe(id, info)
           r.diff = 0
@@ -129,6 +134,7 @@ function ns.Scan(verbose)
         elseif wantAll and (info.maxTrivialLevel or 0) <= 300 then
           local r = makeRecipe(id, info)
           r.diff, r.extra = 0, true
+          if #later > 0 then r.teach = later end -- only to show where it comes from; the plan never uses it
           if not r.out or ns.ItemExists(r.out) then every[#every + 1] = r end
         end
       elseif wantAll and (info.maxTrivialLevel or 0) <= 300 then
