@@ -149,3 +149,27 @@ function ns.ToggleUI()
   if not frame then build() end
   if frame:IsShown() then frame:Hide() else frame:Show(); ns.RefreshUI() end
 end
+
+-- /margin report: writes both tabs as plain text into MarginDB.report so it can
+-- be read from the SavedVariables file after /reload.
+function ns.Report()
+  local out = {}
+  local function add(s) out[#out + 1] = s end
+  local function plain(c) return c and ("%dg %ds %dc"):format(math.floor(c / 10000), math.floor(c / 100) % 100, c % 100) or "?" end
+  for name, prof in pairs(ns.Char().profs) do
+    local rows = ns.Evaluate(prof)
+    add(("== %s %d/%d =="):format(name, prof.skill, prof.max))
+    for _, d in ipairs(rows) do
+      local parts = {}
+      for _, l in ipairs(d.lines) do
+        local n = C_Item.GetItemNameByID(l.item) or ("#" .. l.item)
+        parts[#parts + 1] = ("%dx%s@%s%s"):format(l.count, n, l.unit and plain(l.unit) or "NONE", l.src and ("(" .. l.src .. ")") or "")
+      end
+      local vend, ah = ns.Revenue(d.r)
+      add(("%s | diff %s chance %.2f | cost %s | vendor sale %s | AH net %s | %s"):format(
+        d.r.name, tostring(d.r.diff), d.chance, plain(d.cost), plain(vend), plain(ah), table.concat(parts, ", ")))
+    end
+  end
+  MarginDB.report = out
+  ns.Print(#out, "lines saved. /reload to write the file.")
+end

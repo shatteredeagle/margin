@@ -40,6 +40,8 @@ SlashCmdList.MARGIN = function(msg)
   msg = (msg or ""):lower()
   if msg == "scan" then
     ns.Scan(true)
+  elseif msg == "report" then
+    ns.Report()
   elseif msg:match("^cut") then
     local pct = tonumber(msg:match("cut%s+(%d+)"))
     if pct then ns.SetOpt("ahCut", pct / 100); ns.Print("AH cut", pct .. "%") end
