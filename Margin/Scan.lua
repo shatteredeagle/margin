@@ -112,12 +112,12 @@ function ns.Scan(verbose)
         elseif wantAll and (info.maxTrivialLevel or 0) <= 300 then
           local r = makeRecipe(id, info)
           r.diff, r.extra = 0, true
-          every[#every + 1] = r
+          if not r.out or ns.ItemExists(r.out) then every[#every + 1] = r end
         end
       elseif wantAll and (info.maxTrivialLevel or 0) <= 300 then
         local r = makeRecipe(id, info)
         r.diff, r.extra = 0, true
-        every[#every + 1] = r
+        if not r.out or ns.ItemExists(r.out) then every[#every + 1] = r end -- not a Forever item: not a real recipe here
       end
     end
   end

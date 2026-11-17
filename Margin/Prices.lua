@@ -102,3 +102,14 @@ function ns.AHNetPerUnit(itemID)
   local loss = ns.Deposit(itemID, 1) * (1 - ns.Opt("ahChance"))
   return math.floor(net - loss)
 end
+
+-- Whether the game has this item at all. The profession window's full recipe list and the bundled
+-- Classic tables mention items that do not exist in Forever; they can never be priced or sold.
+-- (GetItemInfoInstant reads the client's own item table, so no server round trip.)
+function ns.ItemExists(itemID)
+  if C_Item and C_Item.GetItemInfoInstant then
+    local ok, got = pcall(C_Item.GetItemInfoInstant, itemID)
+    if ok then return got ~= nil end
+  end
+  return true -- cannot tell: assume it does
+end

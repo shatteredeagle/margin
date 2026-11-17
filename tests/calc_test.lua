@@ -296,4 +296,13 @@ local pz = { skill = 10, max = 60, recipes = { { id = 320, out = 321, qty = 1, d
 assert(#ns.MissingItems({ Z = pz }, false, false, false) == 0)
 assert(#ns.MissingItems({ Z = pz }, false, false, false, nil, true) == 1)
 MarginDB = nil
+
+-- items that do not exist in the game are never "unpriced"
+MarginDB = { searched = {} }
+ns.ItemExists = function(id) return id ~= 881 end
+local pn2 = { skill = 10, max = 60, recipes = { { id = 330, out = 331, qty = 1, diff = 0, ups = 1, trivial = 50, reagents = { {item = 880, count = 1}, {item = 881, count = 1} } } } }
+local found = ns.MissingItems({ N = pn2 }, false, false, false)
+assert(#found == 1 and found[1] == 880, "the item that does not exist is left out")
+ns.ItemExists = nil
+MarginDB = nil
 print("calc ok")

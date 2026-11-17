@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Items that do not exist in Forever (they come from the profession window's full recipe list and the bundled Classic tables) are no longer counted as "unpriced", and recipes whose product is not a Forever item are left out of the Profit tab's "all recipes" view.
+
 - "Margin: N unpriced" now always says what it is doing. When there is nothing to look up it says why (items already searched in the last 12 hours with no listing, or the Scan filter), it reports waiting for item names, skips items the game cannot name instead of waiting for ever, and a run that went quiet no longer blocks the next click.
 
 ## 0.1.5-alpha
