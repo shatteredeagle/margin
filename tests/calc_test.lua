@@ -314,4 +314,32 @@ local ov = ns.TeachOption(mv)
 assert(ov and ov.how == "vendor" and ov.fee == 2200 and ov.rank == 140)
 mv.teach[1].rep = true
 assert(ns.TeachOption(mv) == nil, "a reputation-locked vendor pattern is still out of reach")
+
+-- AH depth: supply, walking the listings, and a route that runs a scarce item out
+assert(loadfile("Margin/Depth.lua"))("Margin", ns)
+MarginDB = { depth = {} }
+ns.NoteDepth(90, { 100, 4, 120, 6, 200, 10 }, false)        -- 20 units: 4 @1s, 6 @1s20c, 10 @2s
+assert(ns.Supply(90) == 20)
+local c, got = ns.WalkCost(90, 8)
+assert(got == 8 and c == 4 * 100 + 4 * 120, c)              -- cheapest first
+c, got = ns.WalkCost(90, 50)
+assert(got == 20 and c == 4 * 100 + 6 * 120 + 10 * 200, "only 20 exist")
+ns.NoteDepth(91, { 100, 5 }, true)                           -- more listings than were kept: supply unknown
+assert(ns.Supply(91) == nil)
+MarginDB.depth[92] = { t = time() - 10 * 86400, p = { 100, 5 } }
+assert(ns.Supply(92) == nil, "stale data is ignored")
+
+ns.Owned = function() return 0 end
+prices[90] = { 100, "ah" }; prices[93] = { 500, "ah" }
+local Cheap = { id = 120, out = 121, qty = 1, diff = 0, ups = 1, trivial = 400, reagents = { {item = 90, count = 1} } }   -- 1s, but only 20 of item 90 exist
+local Dear = { id = 122, out = 123, qty = 1, diff = 0, ups = 1, trivial = 400, reagents = { {item = 93, count = 1} } }    -- 5s, plenty
+local ps = { skill = 10, max = 60, recipes = { Cheap, Dear } }
+local nosup = ns.Plan(ps, 40, { ps }, false)                     -- 30 points: unlimited supply would use Cheap throughout
+assert(#nosup.segs == 2 and nosup.segs[1].row.r == Cheap and nosup.segs[1].to == 30 and nosup.segs[2].row.r == Dear, nosup.segs[1].to)
+assert(nosup.constrained[90], "the plan says what ran out")
+ns.Owned = function(id) return id == 90 and 5 or 0 end         -- holding 5 more stretches it to 25 points
+local held = ns.Plan(ps, 40, { ps }, false)
+assert(held.segs[1].to == 35, held.segs[1].to)
+ns.Owned = function() return 0 end
+MarginDB = nil
 print("calc ok")

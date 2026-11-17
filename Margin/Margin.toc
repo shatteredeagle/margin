@@ -15,6 +15,7 @@ TrainerData.lua
 TaughtData.lua
 GapData.lua
 Prices.lua
+Depth.lua
 Taught.lua
 Scan.lua
 Calc.lua

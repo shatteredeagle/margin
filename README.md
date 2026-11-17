@@ -14,7 +14,7 @@ Updates are new releases. Type `/margin` in game, or use the Margin button on a 
 - **Profit tab:** every recipe you know, priced from the cheapest source for each reagent (vendor, auction house, or crafting it yourself), against what the result sells for.
 - **Leveling tab:** cost per expected skill-up, net of what the crafts sell for. Planned with worst-case skill-up odds by default, so you do not run short of materials.
 - **Route tab:** the cheapest path from your skill to your target, with a shopping list and cards that compare the route under each pricing option. It can include recipes you have not learned yet (trainer recipes and patterns you can buy).
-- **At the auction house:** a shopping list with one-click Search that fills in the quantity, an "unpriced" button that looks up only the items Margin needs, and purchases ticked off as the AH confirms them.
+- **At the auction house:** a shopping list with one-click Search that fills in the quantity, a "to look up" button that searches only the items Margin needs (unpriced ones, and the route's items whose supply it hasn't seen), and purchases ticked off as the AH confirms them.
 - **At a vendor:** buy everything the route still needs (never more than needed), and sell the route's crafted items.
 - Click a Route row to open that recipe in the profession window with the craft count filled in.
 

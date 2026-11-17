@@ -368,18 +368,33 @@ end
 local function route(rows, base, start, target, skip, force, byId)
   local segs, cur = {}, nil
   local total, crafts, gross = 0, 0, 0
+  -- What the AH can still supply of each item the route buys there (listed units plus what you hold).
+  -- Skill points are spent in order, so when something runs out, later points use other recipes.
+  local left, constrained = {}, {}
+  local function supplyOf(item)
+    local v = left[item]
+    if v == nil then v = (ns.Supply and ns.Supply(item) or math.huge) + ns.Owned(item); left[item] = v end
+    return v
+  end
+  local function fits(row, ch)
+    if not row.limits then return true end
+    for item, per in pairs(row.limits) do
+      if per / ch > supplyOf(item) + 1e-9 then constrained[item] = true; return false end
+    end
+    return true
+  end
   for s = start, target - 1 do
     local best, bestPer, bestCh
     -- a locked route keeps its earlier pick for this skill point while it is still usable
     local pick = force and force[s] and byId[force[s]]
     if pick and pick.missing == 0 and not skip[pick] and not pick.unavailable then
       local ch = chanceAt(pick, base, s) * pick.r.ups
-      if ch > 0 then best, bestPer, bestCh = pick, math.max(pick.net, 0) / ch, ch end
+      if ch > 0 and fits(pick, ch) then best, bestPer, bestCh = pick, math.max(pick.net, 0) / ch, ch end
     end
     for _, row in ipairs(best and {} or rows) do
       if row.missing == 0 and not skip[row] and not row.unavailable then
         local ch = chanceAt(row, base, s) * row.r.ups
-        if ch > 0 then
+        if ch > 0 and fits(row, ch) then
           local per = math.max(row.net, 0) / ch -- see rankPer in Evaluate
           if not best or per < bestPer or (per == bestPer and ch > bestCh) then
             best, bestPer, bestCh = row, per, ch
@@ -397,6 +412,7 @@ local function route(rows, base, start, target, skip, force, byId)
       total = total + best.net / bestCh
       gross = gross + best.cost / bestCh
       crafts = crafts + 1 / bestCh
+      for item, per in pairs(best.limits or {}) do left[item] = supplyOf(item) - per / bestCh end
     else
       if cur and cur.gap then
         cur.to = s + 1
@@ -406,7 +422,7 @@ local function route(rows, base, start, target, skip, force, byId)
       end
     end
   end
-  return segs, total, crafts, gross
+  return segs, total, crafts, gross, constrained
 end
 
 -- Cheapest route from the scanned skill up to target, with a shopping list.
@@ -421,10 +437,24 @@ function ns.Plan(prof, target, profs, useTrainer, force)
   local start = prof.skill
   local byId = {}
   for _, row in ipairs(rows) do if not byId[row.r.id] then byId[row.r.id] = row end end
+  -- per craft, how much of each AH-bought item a recipe uses (only items whose supply is known)
+  if ns.Supply and MarginDB and MarginDB.depth and next(MarginDB.depth) then
+    for _, row in ipairs(rows) do
+      local acc = {}
+      expand(row.r, 1, idx, acc, nil, nil)
+      for item, per in pairs(acc) do
+        local _, src = ns.BuyPrice(item)
+        if src == "ah" and ns.Supply(item) then
+          row.limits = row.limits or {}
+          row.limits[item] = per
+        end
+      end
+    end
+  end
   local skip = {}
-  local segs, total, crafts, gross
+  local segs, total, crafts, gross, constrained
   while true do
-    segs, total, crafts, gross = route(rows, base, start, target, skip, force, byId)
+    segs, total, crafts, gross, constrained = route(rows, base, start, target, skip, force, byId)
     local used = {}
     for _, seg in ipairs(segs) do
       if not seg.gap and seg.row.learn then used[seg.row] = true end
@@ -484,7 +514,7 @@ function ns.Plan(prof, target, profs, useTrainer, force)
     end
   end
   return { segs = segs, cost = total, gross = gross, crafts = crafts, shop = shop, shopCost = shopCost,
-    target = target, learn = learn, learnCost = learnCost }
+    target = target, learn = learn, learnCost = learnCost, constrained = constrained }
 end
 
 -- The recipe chosen for each stretch of a plan, to lock a route, and back to a skill -> recipe table.

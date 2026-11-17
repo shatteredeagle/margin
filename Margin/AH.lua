@@ -15,8 +15,24 @@ local function scanProfession()
 end
 
 local function missing(includeOutputs)
-  return ns.MissingItems(ns.Char().profs, includeOutputs, ns.Opt("useTrainer"), ns.Opt("profitScope") == "all",
+  local ids = ns.MissingItems(ns.Char().profs, includeOutputs, ns.Opt("useTrainer"), ns.Opt("profitScope") == "all",
     scanProfession())
+  -- also the items the route buys on the AH whose listings have not been seen lately: a priced item can
+  -- still run out (Margin needs to know how much is for sale, not just the lowest price)
+  local plan = ns.CurrentPlan()
+  if plan then
+    local have, recent = {}, time() - 12 * 3600
+    for _, id in ipairs(ids) do have[id] = true end
+    local searched = MarginDB.searched or {}
+    for _, it in ipairs(plan.shop) do
+      if it.src == "ah" and not it.recipe and not have[it.item] and not ns.Depth(it.item)
+        and not (searched[it.item] and searched[it.item] > recent) and ns.ItemExists(it.item) then
+        ids[#ids + 1] = it.item
+        have[it.item] = true
+      end
+    end
+  end
+  return ids
 end
 
 -- A lookup works through the unpriced items in rounds of ROUND, one after another, until none are
@@ -33,7 +49,7 @@ local function updateText()
   if running then
     button:SetText(("Margin: %d left (click to stop)"):format(#missing(runOutputs)))
   else
-    button:SetText(("Margin: %d unpriced"):format(#missing(false)))
+    button:SetText(("Margin: %d to look up"):format(#missing(false)))
   end
 end
 
@@ -184,7 +200,7 @@ local function build(parent)
   button:SetScript("OnEnter", function(self)
     GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
     GameTooltip:AddLine("Margin")
-    GameTooltip:AddLine("Searches only the reagents Margin has no price for.", 1, 1, 1, true)
+    GameTooltip:AddLine("Looks up what Margin needs: items it has no price for, and items your route buys here whose listings it has not seen lately (to know how much is for sale).", 1, 1, 1, true)
     GameTooltip:AddLine("Shift-click: also unpriced crafted results.", 0.7, 0.7, 0.7, true)
     local none = ns.SearchedUnpriced()
     if none > 0 then

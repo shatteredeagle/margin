@@ -168,9 +168,15 @@ local function compute()
     local have = owned(it.item) + transit
     local buy = math.max(0, it.count - have)
     local kind = buy == 0 and "done" or (it.src == "vendor" and "vendor" or "ah")
+    local sup = (kind == "ah" and ns.Supply) and ns.Supply(it.item) or nil
+    local cash = it.unit and it.unit * buy or nil
+    if kind == "ah" and ns.WalkCost then
+      local c = ns.WalkCost(it.item, buy)
+      if c then cash = c end -- the listings walked cheapest first, not the lowest price times the count
+    end
     list[#list + 1] = { item = it.item, need = it.count, have = have, buy = buy, unit = it.unit, kind = kind,
-      transit = transit }
-    if it.unit then cost = cost + it.unit * buy end
+      transit = transit, sup = sup, short = (sup and buy > sup) and (buy - sup) or 0 }
+    if cash then cost = cost + cash end
   end
   local rank = { ah = 1, vendor = 2, done = 3 }
   for i, r in ipairs(list) do r.i = i end
@@ -274,7 +280,8 @@ function ns.RefreshShopping()
         row.sub:SetText(("|cff60ff60done|r  need %d, have %d%s"):format(d.need, d.have, mail))
         row.name:SetTextColor(0.5, 0.8, 0.5)
       else
-        row.sub:SetText(("buy %d  (need %d, have %d)  %s each%s"):format(d.buy, d.need, d.have, ns.Money(d.unit), mail))
+        row.sub:SetText(("buy %d  (need %d, have %d)  %s each%s%s"):format(d.buy, d.need, d.have, ns.Money(d.unit), mail,
+          d.short > 0 and ("  |cffff6060only %d on the AH|r"):format(d.sup) or ""))
         row.name:SetTextColor(1, 1, 1)
       end
       row.search:SetShown(d.kind == "ah")
@@ -343,6 +350,17 @@ ev:SetScript("OnEvent", function(_, event, a)
     if type(item) ~= "number" or not AH then return end
     local r = AH.GetCommoditySearchResultInfo(item, 1)
     if type(r) == "table" then ns.NoteAHPrice(item, readable(r.unitPrice)) end
+    -- keep the cheapest listings too (how much is for sale, and what it costs to buy deeper)
+    local count = readable(AH.GetNumCommoditySearchResults(item))
+    if type(count) == "number" then
+      local flat, limit = {}, math.min(count, 100)
+      for i = 1, limit do
+        local ri = AH.GetCommoditySearchResultInfo(item, i)
+        local price, qty = type(ri) == "table" and readable(ri.unitPrice), type(ri) == "table" and readable(ri.quantity)
+        if price and qty then flat[#flat + 1] = price; flat[#flat + 1] = qty end
+      end
+      ns.NoteDepth(item, flat, count > limit)
+    end
     scanArrived(item)
     local want = searching[item]
     if not want then return end

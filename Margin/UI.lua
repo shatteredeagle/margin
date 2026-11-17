@@ -671,27 +671,43 @@ local function routeEntries(plan)
       }
     end
   end
-  -- the shopping list: what the route needs, minus what you already hold
+  -- the shopping list: what the route needs, minus what you already hold. For AH items with known
+  -- listings, the cost walks them cheapest first, and a shortage is called out.
   local shopRows, left = {}, 0
   for _, it in ipairs(plan.shop) do
     local have = it.recipe and 0 or ns.Owned(it.item)
     local buy = math.max(0, it.count - have)
-    if it.unit and not it.recipe then left = left + it.unit * buy end
-    shopRows[#shopRows + 1] = { it = it, have = have, buy = buy }
+    local cost = it.unit and it.unit * buy or nil
+    local sup = (it.src == "ah" and not it.recipe) and ns.Supply and ns.Supply(it.item) or nil
+    local short = (sup and buy > sup) and (buy - sup) or 0
+    if it.src == "ah" and not it.recipe and ns.WalkCost then
+      local c = ns.WalkCost(it.item, buy)
+      if c then cost = c end
+    end
+    if cost and not it.recipe then left = left + cost end
+    shopRows[#shopRows + 1] = { it = it, have = have, buy = buy, cost = cost, sup = sup, short = short }
   end
   list[#list + 1] = { name = "|cffffd700Shopping list|r  |cff909090(still to buy)|r", cost = "", sale = "", val = money(left) }
   for _, r in ipairs(shopRows) do
     local it = r.it
+    local flag = r.short > 0 and (" |cffff6060(only %d on the AH)|r"):format(r.sup) or ""
     list[#list + 1] = {
       icon = C_Item.GetItemIconByID(it.item),
-      name = itemName(it.item) .. (r.have > 0 and (" |cff909090(have %d)|r"):format(r.have) or ""),
+      name = itemName(it.item) .. (r.have > 0 and (" |cff909090(have %d)|r"):format(r.have) or "") .. flag,
       cost = r.buy == 0 and "|cff60ff60have enough|r" or ("x " .. r.buy),
-      sale = money(it.unit), val = money(it.unit and it.unit * r.buy),
+      sale = money(it.unit), val = money(r.cost),
       tip = function(tt)
         tt:AddLine(itemName(it.item))
         tt:AddDoubleLine("Source", it.src or "no price")
         tt:AddDoubleLine("Route needs", it.count)
         tt:AddDoubleLine("You hold", r.have)
+        if r.sup then
+          tt:AddDoubleLine("Listed on the AH", r.sup)
+          if r.short > 0 then tt:AddLine(("Short by %d: the AH does not have enough. Only what exists is priced here."):format(r.short), 1, 0.4, 0.4, true) end
+        end
+        if it.unit and r.buy > 1 and r.cost then
+          tt:AddDoubleLine("Average each", money(math.floor(r.cost / math.max(1, math.min(r.buy, r.sup or r.buy)))))
+        end
       end,
     }
   end
@@ -783,7 +799,13 @@ redraw = function()
       local lock = ns.Char().locks and ns.Char().locks[profName]
       frame.info:SetText(("%s %d/%d  -  route to %d%s"):format(profName, prof.skill, prof.max, cache.target,
         (lock and ns.Opt("routeLock") and ("  |cff909090(locked %s)|r"):format(date("%b %d", lock.t)) or "")
-          .. ("  |cff909090%s odds|r"):format(ns.Opt("odds") == "typical" and "typical" or "worst-case")))
+          .. ("  |cff909090%s odds|r"):format(ns.Opt("odds") == "typical" and "typical" or "worst-case")
+          .. (function()
+            local names = {}
+            for item in pairs(cache.sel.plan.constrained or {}) do names[#names + 1] = itemName(item) end
+            table.sort(names)
+            return #names > 0 and ("  |cffffd070limited by AH supply: %s|r"):format(table.concat(names, ", ")) or ""
+          end)()))
       for i, c in ipairs(frame.cards) do
         local d = cache.cards[i]
         c.action = d.action

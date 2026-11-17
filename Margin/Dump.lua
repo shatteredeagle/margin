@@ -37,10 +37,14 @@ local function describe(plan, out, title)
       end
     end
   end
+  local limited = {}
+  for item in pairs(plan.constrained or {}) do limited[#limited + 1] = itemName(item) end
+  if #limited > 0 then out[#out + 1] = "  limited by AH supply: " .. table.concat(limited, ", ") end
   out[#out + 1] = "  shopping list:"
   for _, it in ipairs(plan.shop) do
-    out[#out + 1] = ("    %dx %s @ %s (%s)%s"):format(it.count, itemName(it.item), plain(it.unit), it.src or "no price",
-      it.recipe and " [recipe item]" or "")
+    local sup = ns.Supply and ns.Supply(it.item)
+    out[#out + 1] = ("    %dx %s @ %s (%s)%s%s"):format(it.count, itemName(it.item), plain(it.unit), it.src or "no price",
+      it.recipe and " [recipe item]" or "", sup and (" [AH lists %d%s]"):format(sup, sup < it.count and ", SHORT" or "") or "")
   end
 end
 
