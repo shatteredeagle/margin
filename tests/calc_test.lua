@@ -54,4 +54,21 @@ assert(ns.RouteChance({ trivial = 30, diff = 3 }, 10, 10) == 0)
 -- missing items: item 3 only
 local mi = ns.MissingItems({ pc2 })
 assert(#mi == 1 and mi[1] == 3)
+
+-- trainer recipes: learned L costs 100c/craft; trainer recipe T costs 1c/craft, fee 50c, rank 12.
+local L = { id = 1, out = 30, qty = 1, diff = 0, ups = 1, trivial = 40, reagents = { {item = 4, count = 1} } }
+local Tr = { id = 2, out = 31, qty = 1, diff = 0, ups = 1, trivial = 40, reagents = { {item = 1, count = 1} },
+  train = { rank = 12, fee = 50 } }
+prices[4] = {100, "vendor"}; prices[1] = {10, "vendor"}
+local pt = { skill = 10, max = 40, recipes = { L }, unlearned = { Tr } }
+local noT = ns.Plan(pt, 20, { pt }, false)
+assert(noT.cost == 1000 and #noT.learn == 0)             -- 10 points x 100c
+local withT = ns.Plan(pt, 20, { pt }, true)
+assert(#withT.learn == 1 and withT.learn[1].fee == 50, "trainer recipe chosen")
+assert(withT.segs[1].row.r == L and withT.segs[1].to == 12)  -- before rank 12 only L
+assert(withT.cost == 200 + 80, withT.cost)                -- 2 pts x100 + 8 pts x10c
+-- fee too high: not worth learning
+Tr.train.fee = 100000
+local no2 = ns.Plan(pt, 20, { pt }, true)
+assert(#no2.learn == 0 and no2.cost == 1000)
 print("calc ok")

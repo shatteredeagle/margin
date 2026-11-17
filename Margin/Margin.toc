@@ -10,6 +10,7 @@
 
 Core.lua
 VendorData.lua
+TrainerData.lua
 Prices.lua
 Scan.lua
 Calc.lua

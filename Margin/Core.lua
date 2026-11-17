@@ -5,6 +5,7 @@ ns.defaults = {
   minAge = nil,       -- reserved: max Auctionator data age in days
   sortKey = "vendor", -- "vendor" or "ah"
   showAll = true,     -- list unprofitable / grey recipes too
+  useTrainer = true,  -- route may include recipes you still have to learn from a trainer
 }
 
 local function chardb()

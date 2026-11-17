@@ -63,10 +63,16 @@ function ns.Revenue(r)
 end
 
 -- One row per craftable recipe with cost, both profit figures and cost per skill-up.
-function ns.Evaluate(prof, profs)
+function ns.Evaluate(prof, profs, includeTrainer)
   local rows = {}
   local idx = craftIndex(profs or (ns.Char and ns.Char().profs) or { prof })
-  for _, r in ipairs(prof.recipes) do
+  local list = prof.recipes
+  if includeTrainer and prof.unlearned and #prof.unlearned > 0 then
+    list = {}
+    for _, r in ipairs(prof.recipes) do list[#list + 1] = r end
+    for _, r in ipairs(prof.unlearned) do list[#list + 1] = r end
+  end
+  for _, r in ipairs(list) do
     local cost, lines, missing = ns.RecipeCost(r, idx)
     local vend, ah = ns.Revenue(r)
     local chance = (CHANCE[r.diff] or 0) * r.ups
@@ -167,21 +173,28 @@ local function expand(r, mult, idx, acc)
   end
 end
 
--- Cheapest route from the scanned skill up to target. At each skill point the
--- recipe with the lowest expected cost per skill-up wins (points are independent,
--- so greedy per point is optimal). Returns segments, totals and a shopping list.
-function ns.Plan(prof, target, profs)
-  profs = profs or (ns.Char and ns.Char().profs) or { prof }
-  local idx = craftIndex(profs)
-  local rows = ns.Evaluate(prof, profs)
-  local s0 = prof.skill
+-- Skill-up chance of row.r at skill s for the route. Learned recipes use the
+-- difficulty seen at the scanned skill; trainer recipes start orange at the rank
+-- the trainer needs and are unavailable before it.
+local function chanceAt(r, s0, s)
+  if r.train then
+    if s < r.train.rank then return 0 end
+    return ns.RouteChance(r, r.train.rank, s)
+  end
+  return ns.RouteChance(r, s0, s)
+end
+
+-- One pass of the planner: at each skill point the available recipe with the
+-- lowest expected cost per skill-up wins (points are independent, so greedy per
+-- point is optimal). `skip` is a set of rows that may not be used.
+local function route(rows, s0, target, skip)
   local segs, cur = {}, nil
   local total, crafts = 0, 0
   for s = s0, target - 1 do
     local best, bestPer, bestCh
     for _, row in ipairs(rows) do
-      if row.missing == 0 then
-        local ch = ns.RouteChance(row.r, s0, s) * row.r.ups
+      if row.missing == 0 and not skip[row] then
+        local ch = chanceAt(row.r, s0, s) * row.r.ups
         if ch > 0 then
           local per = row.cost / ch
           if not best or per < bestPer or (per == bestPer and ch > bestCh) then
@@ -208,6 +221,49 @@ function ns.Plan(prof, target, profs)
       end
     end
   end
+  return segs, total, crafts
+end
+
+-- Cheapest route from the scanned skill up to target, with a shopping list.
+-- With useTrainer, unlearned recipes a trainer teaches are candidates too, and a
+-- recipe stays in only if it saves more than its trainer fee.
+function ns.Plan(prof, target, profs, useTrainer)
+  profs = profs or (ns.Char and ns.Char().profs) or { prof }
+  local idx = craftIndex(profs)
+  local rows = ns.Evaluate(prof, profs, useTrainer)
+  local s0 = prof.skill
+  local skip = {}
+  local segs, total, crafts
+  while true do
+    segs, total, crafts = route(rows, s0, target, skip)
+    local used = {}
+    for _, seg in ipairs(segs) do
+      if not seg.gap and seg.row.r.train then used[seg.row] = true end
+    end
+    local worst, worstNet
+    for row in pairs(used) do
+      skip[row] = true
+      local _, alt = route(rows, s0, target, skip)
+      skip[row] = nil
+      local net = alt - total - row.r.train.fee -- what dropping this recipe would save
+      if net < 0 and (not worstNet or net < worstNet) then worst, worstNet = row, net end
+    end
+    if not worst then break end
+    skip[worst] = true
+  end
+
+  local learn, learnCost = {}, 0
+  for _, seg in ipairs(segs) do
+    if not seg.gap and seg.row.r.train then
+      local seen = false
+      for _, l in ipairs(learn) do if l.row == seg.row then seen = true end end
+      if not seen then
+        learn[#learn + 1] = { row = seg.row, rank = seg.row.r.train.rank, fee = seg.row.r.train.fee }
+        learnCost = learnCost + seg.row.r.train.fee
+      end
+    end
+  end
+
   local acc = {}
   for _, seg in ipairs(segs) do
     if not seg.gap then expand(seg.row.r, math.ceil(seg.crafts), idx, acc) end
@@ -220,5 +276,6 @@ function ns.Plan(prof, target, profs)
     if unit then shopCost = shopCost + unit * n end
   end
   table.sort(shop, function(a, b) return (a.unit or 0) * a.count > (b.unit or 0) * b.count end)
-  return { segs = segs, cost = total, crafts = crafts, shop = shop, shopCost = shopCost, target = target }
+  return { segs = segs, cost = total, crafts = crafts, shop = shop, shopCost = shopCost,
+    target = target, learn = learn, learnCost = learnCost }
 end

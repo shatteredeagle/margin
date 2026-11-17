@@ -136,7 +136,11 @@ local function build()
     ns.RefreshUI()
   end)
   frame.tAll = button(490, 152, "", function()
-    ns.SetOpt("showAll", not ns.Opt("showAll"))
+    if tab == "route" then
+      ns.SetOpt("useTrainer", not ns.Opt("useTrainer"))
+    else
+      ns.SetOpt("showAll", not ns.Opt("showAll"))
+    end
     setOffset(0)
   end)
 
@@ -267,7 +271,7 @@ end
 local function routeEntries(prof)
   local target = ns.Opt("routeTarget") or prof.max
   target = math.min(math.max(target, prof.skill + 1), prof.max)
-  local plan = ns.Plan(prof, target)
+  local plan = ns.Plan(prof, target, nil, ns.Opt("useTrainer"))
   local list = {}
   for _, seg in ipairs(plan.segs) do
     if seg.gap then
@@ -277,8 +281,23 @@ local function routeEntries(prof)
       local n = math.ceil(seg.crafts)
       list[#list + 1] = {
         icon = r.icon, data = seg.row,
-        name = ("%d-%d  |cff%s%s|r"):format(seg.from, seg.to, DIFF_COLOR[r.diff] or "ffffff", r.name),
+        name = ("%d-%d  |cff%s%s|r%s"):format(seg.from, seg.to,
+          r.train and DIFF_COLOR[0] or (DIFF_COLOR[r.diff] or "ffffff"), r.name, r.train and " |cff80c0ff(learn)|r" or ""),
         cost = ("~%d crafts"):format(n), sale = money(seg.row.cost), val = money(seg.cost),
+      }
+    end
+  end
+  if #plan.learn > 0 then
+    list[#list + 1] = { name = "|cffffd700Learn from a trainer|r", cost = "", sale = "", val = money(plan.learnCost) }
+    for _, l in ipairs(plan.learn) do
+      local r = l.row.r
+      list[#list + 1] = {
+        icon = r.icon, name = r.name, cost = ("needs skill %d"):format(l.rank), sale = "", val = money(l.fee),
+        tip = function(tt)
+          tt:AddLine(r.name)
+          tt:AddLine(("Trainer fee %s, requires %d skill."):format(money(l.fee), l.rank), 1, 1, 1, true)
+          tt:AddLine("Forever trainer data (EG Link); not every trainer is listed.", 0.7, 0.7, 0.7, true)
+        end,
       }
     end
   end
@@ -303,8 +322,11 @@ function ns.RefreshUI()
   local prof = profName and profs[profName]
   local key, showAll = ns.Opt("sortKey"), ns.Opt("showAll")
   frame.tSort:SetText(key == "ah" and "Sell: AH" or "Sell: vendor")
-  frame.tAll:SetText(showAll and "Show: everything" or "Show: useful only")
-  frame.tAll:SetEnabled(tab ~= "route")
+  if tab == "route" then
+    frame.tAll:SetText(ns.Opt("useTrainer") and "Trainer recipes: on" or "Trainer recipes: off")
+  else
+    frame.tAll:SetText(showAll and "Show: everything" or "Show: useful only")
+  end
   local count = 0
   for _ in pairs(profs) do count = count + 1 end
   frame.tProf:SetText(profName or "Profession")
@@ -323,8 +345,8 @@ function ns.RefreshUI()
     if tab == "route" then
       local plan, target
       list, plan, target = routeEntries(prof)
-      frame.info:SetText(("%s %d/%d  -  route to %d: ~%d crafts, %s  (estimate; /margin route <skill>)"):format(
-        profName, prof.skill, prof.max, target, math.ceil(plan.crafts), money(plan.cost)))
+      frame.info:SetText(("%s %d/%d  -  route to %d: ~%d crafts, %s + %s fees"):format(
+        profName, prof.skill, prof.max, target, math.ceil(plan.crafts), money(plan.cost), money(plan.learnCost)))
     else
       local rows = ns.Evaluate(prof)
       local src

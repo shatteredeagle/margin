@@ -8,3 +8,7 @@ WoW Forever addon: shows profitable crafts and the cheapest recipes to level a p
 - Vendor reagent prices: Auctionator's merchant cache wins; a bundled table (threads, salt, vials, dyes, spices, flux...) fills in the rest. Regenerate it with `tools/gen_vendor.py` (see its docstring).
 
 MIT licensed.
+
+Trainer recipes: the Route tab can include recipes you still have to learn, using Forever trainer data
+from Efficient Games' EG Link output (CC BY 4.0, see THIRD_PARTY.md). Coverage is partial: only trainers
+players have opened are listed. Toggle it with the "Trainer recipes" button on the Route tab.
