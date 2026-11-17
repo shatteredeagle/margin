@@ -342,6 +342,11 @@ local function layout(isRoute)
 end
 
 -- The route for the profession the window shows: plan, prof, name, target (nil when nothing is scanned).
+-- Planning is heavy, so results are kept per setting until prices or scans change (ns.InvalidatePlan);
+-- bag updates and scrolling reuse them.
+local planCache = {}
+function ns.InvalidatePlan() wipe(planCache) end
+
 function ns.CurrentPlan()
   local profs = ns.Char().profs
   local name, prof = profName, profName and profs[profName]
@@ -349,7 +354,14 @@ function ns.CurrentPlan()
   if not prof then return nil end
   local target = ns.Opt("routeTarget") or prof.max
   target = math.min(math.max(target, prof.skill + 1), prof.max)
-  return ns.Plan(prof, target, nil, ns.Opt("useTrainer")), prof, name, target
+  local key = table.concat({ name, prof.skill, prof.time or 0, tostring(ns.Opt("resale")),
+    tostring(ns.Opt("useTrainer")), target }, "|")
+  local hit = planCache[key]
+  if not hit then
+    hit = ns.Plan(prof, target, nil, ns.Opt("useTrainer"))
+    planCache[key] = hit
+  end
+  return hit, prof, name, target
 end
 
 local function routeEntries(plan)
@@ -423,7 +435,9 @@ local function routeData()
 end
 
 function ns.RefreshUI()
+  ns.InvalidatePlan()
   if ns.RefreshShopping then ns.RefreshShopping() end
+  if ns.RefreshMerchant then ns.RefreshMerchant() end
   cache = nil
   if redraw then redraw() end
 end

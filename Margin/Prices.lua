@@ -14,6 +14,7 @@ function ns.NoteAHPrice(itemID, copper)
   if type(copper) ~= "number" or copper <= 0 then return end
   MarginDB.prices = MarginDB.prices or {}
   MarginDB.prices[itemID] = { p = copper, t = time() }
+  if ns.InvalidatePlan then ns.InvalidatePlan() end
 end
 
 -- Vendor buy price: what Auctionator saw at a merchant, else the bundled table.
