@@ -44,8 +44,8 @@ local pc = { recipes = { a, b } }
 assert(ns.Evaluate(pc, { pc })[1].missing == 1)
 
 -- route: at skill 10 -> 14. A is orange to 14 (cheap, 10c), B is orange but dearer (50c).
-local A = { id = 1, out = 20, qty = 1, diff = 0, ups = 1, trivial = 30, reagents = { {item = 1, count = 1} } }
-local B = { id = 2, out = 21, qty = 1, diff = 0, ups = 1, trivial = 30, reagents = { {item = 2, count = 1} } }
+local A = { id = 1, out = 20, qty = 1, diff = 0, ups = 1, trivial = 400, reagents = { {item = 1, count = 1} } }
+local B = { id = 2, out = 21, qty = 1, diff = 0, ups = 1, trivial = 400, reagents = { {item = 2, count = 1} } }
 local pr = { skill = 10, max = 30, recipes = { A, B } }
 local plan = ns.Plan(pr, 14, { pr })
 assert(#plan.segs == 1 and plan.segs[1].row.r == A, "A wins")
@@ -53,7 +53,7 @@ assert(plan.segs[1].from == 10 and plan.segs[1].to == 14)
 assert(plan.cost == 40 and plan.crafts == 4, plan.cost)
 assert(plan.shop[1].item == 1 and plan.shop[1].count == 4)
 -- an unpriced recipe is never chosen; with nothing priced the route is one gap
-local C = { id = 3, out = 22, qty = 1, diff = 0, ups = 1, trivial = 30, reagents = { {item = 3, count = 1} } }
+local C = { id = 3, out = 22, qty = 1, diff = 0, ups = 1, trivial = 400, reagents = { {item = 3, count = 1} } }
 local pc2 = { skill = 10, max = 30, recipes = { C } }
 local gp = ns.Plan(pc2, 13, { pc2 })
 assert(#gp.segs == 1 and gp.segs[1].gap and gp.segs[1].to == 13)
@@ -66,8 +66,8 @@ local mi = ns.MissingItems({ pc2 })
 assert(#mi == 1 and mi[1] == 3)
 
 -- trainer recipes: learned L costs 100c/craft; trainer recipe T costs 1c/craft, fee 50c, rank 12.
-local L = { id = 1, out = 30, qty = 1, diff = 0, ups = 1, trivial = 40, reagents = { {item = 4, count = 1} } }
-local Tr = { id = 2, out = 31, qty = 1, diff = 0, ups = 1, trivial = 40, reagents = { {item = 1, count = 1} },
+local L = { id = 1, out = 30, qty = 1, diff = 0, ups = 1, trivial = 400, reagents = { {item = 4, count = 1} } }
+local Tr = { id = 2, out = 31, qty = 1, diff = 0, ups = 1, trivial = 400, reagents = { {item = 1, count = 1} },
   train = { rank = 12, fee = 50 } }
 prices[4] = {100, "vendor"}; prices[1] = {10, "vendor"}
 local pt = { skill = 10, max = 40, recipes = { L }, unlearned = { Tr } }
@@ -92,8 +92,8 @@ assert(rr[1].resale == 950)
 -- the route prefers the recipe with the better NET: cheap-but-worthless vs dear-but-vendors-high
 resaleMode = "vendor"
 prices[5] = {10, "vendor"}; prices[6] = {100, "vendor"}
-local W = { id = 7, out = 8, qty = 1, diff = 0, ups = 1, trivial = 40, reagents = { {item = 5, count = 1} } }   -- 10c, no sale value
-local V = { id = 8, out = 9, qty = 1, diff = 0, ups = 1, trivial = 40, reagents = { {item = 6, count = 1} } }   -- 100c, sells 300c
+local W = { id = 7, out = 8, qty = 1, diff = 0, ups = 1, trivial = 400, reagents = { {item = 5, count = 1} } }   -- 10c, no sale value
+local V = { id = 8, out = 9, qty = 1, diff = 0, ups = 1, trivial = 400, reagents = { {item = 6, count = 1} } }   -- 100c, sells 300c
 local pv = { skill = 10, max = 40, recipes = { W, V } }
 local plv = ns.Plan(pv, 12, { pv }, false)
 assert(plv.segs[1].row.r == V, "net-best recipe wins")
@@ -103,7 +103,7 @@ assert(ns.Plan(pv, 12, { pv }, false).segs[1].row.r == W, "off: gross-cheapest w
 
 -- recipes taught by an item: pattern item 50 is on the AH for 200c
 resaleMode = "off"
-local T2 = { id = 20, out = 32, qty = 1, diff = 0, ups = 1, trivial = 40, reagents = { {item = 1, count = 1} },
+local T2 = { id = 20, out = 32, qty = 1, diff = 0, ups = 1, trivial = 400, reagents = { {item = 1, count = 1} },
   teach = { { item = 50, rank = 12, rep = false } } }
 local pt2 = { skill = 10, max = 40, recipes = { L }, unlearned = { T2 } }
 local pl = ns.Plan(pt2, 20, { pt2 }, true)
@@ -136,7 +136,7 @@ depositEach = 0
 
 -- intermediates become inline prep steps: user recipe needs 3 of item 15, made 2 at a time from 4 of item 1
 local inter2 = { id = 40, out = 15, qty = 2, diff = 3, ups = 1, trivial = 5, reagents = { {item = 1, count = 4} } }
-local user2 = { id = 41, out = 9, qty = 1, diff = 0, ups = 1, trivial = 40, reagents = { {item = 15, count = 3} } }
+local user2 = { id = 41, out = 9, qty = 1, diff = 0, ups = 1, trivial = 400, reagents = { {item = 15, count = 3} } }
 local prof3 = { skill = 10, max = 40, recipes = { inter2, user2 } }
 local plan3 = ns.Plan(prof3, 12, { prof3 }, false)
 local seg3 = plan3.segs[1]
@@ -145,8 +145,8 @@ assert(seg3.prep[1].item == 15 and seg3.prep[1].units == 6 and seg3.prep[1].craf
 assert(seg3.prep[1].recipe == inter2)
 
 -- locking and skill drift: forced picks win while usable; the route starts from the current skill
-local FA = { id = 60, out = 70, qty = 1, diff = 0, ups = 1, trivial = 60, reagents = { {item = 1, count = 1} } }   -- 10c
-local FB = { id = 61, out = 71, qty = 1, diff = 0, ups = 1, trivial = 60, reagents = { {item = 2, count = 1} } }   -- 50c
+local FA = { id = 60, out = 70, qty = 1, diff = 0, ups = 1, trivial = 400, reagents = { {item = 1, count = 1} } }   -- 10c
+local FB = { id = 61, out = 71, qty = 1, diff = 0, ups = 1, trivial = 400, reagents = { {item = 2, count = 1} } }   -- 50c
 local pf = { skill = 14, scanSkill = 10, max = 60, recipes = { FA, FB } }
 local free = ns.Plan(pf, 18, { pf }, false)
 assert(free.segs[1].from == 14 and free.segs[1].row.r == FA, "starts from the current skill")
@@ -164,10 +164,11 @@ oddsMode = "worst"
 assert(ns.Odds(0) == 1 and ns.Odds(1) == 0.25 and ns.Odds(2) == 0.05 and ns.Odds(3) == 0)
 assert(ns.RouteChance({ trivial = 30, diff = 1 }, 10, 10) == 0.25)
 assert(ns.RouteChance({ trivial = 30, diff = 0 }, 10, 10) == 1)
--- orange at s0=10, grey at 40: orange to 20, yellow to 30, green after (thirds)
-assert(ns.RouteChance({ trivial = 40, diff = 0 }, 10, 19) == 1)
-assert(ns.RouteChance({ trivial = 40, diff = 0 }, 10, 21) == 0.25)
-assert(ns.RouteChance({ trivial = 40, diff = 0 }, 10, 31) == 0.05)
+-- orange at s0=10, grey at 40, no Classic entry (gap 12): yellow from 40-24-2=14, green from 40-12-2=26
+assert(ns.RouteChance({ trivial = 40, diff = 0 }, 10, 13) == 1)
+assert(ns.RouteChance({ trivial = 40, diff = 0 }, 10, 14) == 0.25)
+assert(ns.RouteChance({ trivial = 40, diff = 0 }, 10, 25) == 0.25)
+assert(ns.RouteChance({ trivial = 40, diff = 0 }, 10, 26) == 0.05)
 -- a yellow recipe plans 4 crafts per skill-up in worst case, not 1.33
 local Yw = { id = 80, out = 81, qty = 1, diff = 1, ups = 1, trivial = 60, reagents = { {item = 1, count = 1} } }
 local pyw = { skill = 10, max = 60, recipes = { Yw } }
@@ -178,9 +179,9 @@ assert(ns.Evaluate(pyw, { pyw })[1].chance == 0.75)
 
 -- unpriced patterns: skipped when the recipe's reagents cannot be priced, and when searched recently
 MarginDB = { searched = {} }
-local T3 = { id = 90, out = 91, qty = 1, diff = 0, ups = 1, trivial = 60, reagents = { {item = 1, count = 1} },
+local T3 = { id = 90, out = 91, qty = 1, diff = 0, ups = 1, trivial = 400, reagents = { {item = 1, count = 1} },
   teach = { { item = 61, rank = 20, rep = false } } }
-local T4 = { id = 92, out = 93, qty = 1, diff = 0, ups = 1, trivial = 60, reagents = { {item = 998, count = 1} },
+local T4 = { id = 92, out = 93, qty = 1, diff = 0, ups = 1, trivial = 400, reagents = { {item = 998, count = 1} },
   teach = { { item = 62, rank = 20, rep = false } } }
 local pm = { skill = 10, max = 60, recipes = {}, unlearned = { T3, T4 } }
 local m1 = ns.MissingItems({ pm }, false, true)
@@ -191,8 +192,8 @@ assert(#ns.MissingItems({ pm }, false, true) == 0, "recently searched items are 
 -- profit must not make a low-odds recipe look better: a 1.0-chance profitable recipe beats a 0.05 one
 oddsMode = "worst"; resaleMode = "vendor"
 prices[7] = {10, "vendor"}; prices[8] = {10, "vendor"}
-local Lo = { id = 100, out = 9, qty = 1, diff = 2, ups = 1, trivial = 90, reagents = { {item = 7, count = 1} } } -- green: 5%
-local Hi = { id = 101, out = 9, qty = 1, diff = 0, ups = 1, trivial = 90, reagents = { {item = 8, count = 1} } } -- orange: 100%
+local Lo = { id = 100, out = 9, qty = 1, diff = 2, ups = 1, trivial = 400, reagents = { {item = 7, count = 1} } } -- green: 5%
+local Hi = { id = 101, out = 9, qty = 1, diff = 0, ups = 1, trivial = 400, reagents = { {item = 8, count = 1} } } -- orange: 100%
 local pq = { skill = 10, max = 90, recipes = { Lo, Hi } }
 local rq = ns.Evaluate(pq, { pq })
 assert(rq[1].rankPer == 0 and rq[2].rankPer == 0)
@@ -204,9 +205,9 @@ oddsMode = "typical"; resaleMode = "off"
 
 -- all-recipes scope: unlearned and extra recipes join the evaluation only when asked
 prices[20] = {10, "vendor"}
-local known = { id = 200, out = 9, qty = 1, diff = 0, ups = 1, trivial = 50, reagents = { {item = 20, count = 1} } }
-local extra = { id = 201, out = 9, qty = 1, diff = 0, ups = 1, trivial = 50, extra = true, reagents = { {item = 20, count = 1} } }
-local trn = { id = 202, out = 9, qty = 1, diff = 0, ups = 1, trivial = 50, train = { rank = 20, fee = 100 }, reagents = { {item = 20, count = 1} } }
+local known = { id = 200, out = 9, qty = 1, diff = 0, ups = 1, trivial = 400, reagents = { {item = 20, count = 1} } }
+local extra = { id = 201, out = 9, qty = 1, diff = 0, ups = 1, trivial = 400, extra = true, reagents = { {item = 20, count = 1} } }
+local trn = { id = 202, out = 9, qty = 1, diff = 0, ups = 1, trivial = 400, train = { rank = 20, fee = 100 }, reagents = { {item = 20, count = 1} } }
 local pall = { skill = 10, max = 60, recipes = { known }, unlearned = { trn }, every = { extra } }
 assert(#ns.Evaluate(pall, { pall }, false, false) == 1)
 assert(#ns.Evaluate(pall, { pall }, true, false) == 2)
@@ -217,9 +218,12 @@ assert(#allRows == 3 and allRows[2].learn and allRows[2].learn.how == "trainer" 
 MarginDB = { bands = {} }
 oddsMode = "worst"
 local rb = { id = 500, trivial = 60, diff = 0 }
-assert(ns.RouteChance(rb, 10, 30) == 0.25, "no observations: the one-third guess has turned yellow by 30")
+assert(ns.RouteChance(rb, 10, 30) == 1, "no observations: the model keeps it orange until 60-24-2=34")
 MarginDB.bands[500] = { y1 = 35, y2 = 40 }
 assert(ns.RouteChance(rb, 10, 30) == 1, "observed orange until at least 35")
+MarginDB.bands[500] = { y1 = 20, y2 = 25 }
+assert(ns.RouteChance(rb, 10, 30) == 0.25, "observed yellow by 25: the model's 34 is pulled in")
+MarginDB.bands[500] = { y1 = 35, y2 = 40 }
 assert(ns.RouteChance(rb, 10, 36) == 0.25 or ns.RouteChance(rb, 10, 36) == 1) -- inside the range: either side is fine
 -- observing: orange at 120, then yellow at 130
 MarginDB.bands = {}
@@ -230,4 +234,36 @@ ns.ObserveBands({ { id = 7, diff = 1, train = true } }, 135) -- unlearned entrie
 assert(MarginDB.bands[7].g1 == 131)
 oddsMode = "typical"
 MarginDB = nil
+
+-- owned intermediates reduce what is left to make, and the raw materials with it
+local ownedNow = { [15] = 4 }
+ns.Owned = function(id) return ownedNow[id] or 0 end
+local plan4 = ns.Plan(prof3, 12, { prof3 }, false)
+local pr4 = plan4.segs[1].prep[1]
+assert(pr4.have == 4 and pr4.units == 2 and pr4.crafts == 1, pr4.crafts)   -- needs 6, holds 4: make 2 (one craft of 2)
+local base1
+for _, it in ipairs(plan4.shop) do if it.item == 1 then base1 = it.count end end
+assert(base1 == 4, base1)                                                    -- one craft takes 4 of item 1
+ownedNow[15] = 10
+local plan5 = ns.Plan(prof3, 12, { prof3 }, false)
+assert(plan5.segs[1].prep[1].crafts == 0 and plan5.segs[1].prep[1].have == 6)
+local base1b = 0
+for _, it in ipairs(plan5.shop) do if it.item == 1 then base1b = it.count end end
+assert(base1b == 0, "nothing left to make, so no raw materials needed")
+ns.Owned = function() return 0 end
+
+-- the edges come from the grey level and the gap (Forever's gap is half Classic's)
+oddsMode = "typical"
+MarginDB = nil
+-- Hillman's Leather Boots on Forever: grey at 160, orange at 134 turned yellow at 135-136
+local boots = { id = 1255103, trivial = 160, diff = 0 }
+assert(ns.RouteChance(boots, 134, 135) == 1 and ns.RouteChance(boots, 134, 136) == 0.75)
+ns.GAP = { [900] = 20 }                      -- Classic gap 20 -> Forever gap 10: yellow from 100-20, green from 100-10
+local gapped = { id = 900, trivial = 100, diff = 0 }
+assert(ns.RouteChance(gapped, 10, 79) == 1 and ns.RouteChance(gapped, 10, 80) == 0.75)
+assert(ns.RouteChance(gapped, 10, 89) == 0.75 and ns.RouteChance(gapped, 10, 90) == 0.25)
+-- a recipe seen yellow now is yellow even when the model says it should still be orange
+assert(ns.RouteChance({ id = 901, trivial = 200, diff = 1 }, 100, 100) == 0.75)
+ns.GAP = nil
+oddsMode = "typical"
 print("calc ok")

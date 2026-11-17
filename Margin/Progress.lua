@@ -153,3 +153,16 @@ learn:SetScript("OnEvent", function(_, event, a)
     C_Timer.After(2, function() spellsQueued = nil; if windowReady() then ns.Scan(false) end end)
   end
 end)
+
+-- Items you craft or buy change what is left to make and buy, so the route follows your bags.
+local bagsQueued
+local bagFrame = CreateFrame("Frame")
+bagFrame:RegisterEvent("BAG_UPDATE_DELAYED")
+bagFrame:SetScript("OnEvent", function()
+  if bagsQueued then return end
+  bagsQueued = true
+  C_Timer.After(1, function()
+    bagsQueued = nil
+    if ns.RefreshUI then ns.RefreshUI() end
+  end)
+end)

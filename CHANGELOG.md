@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.4-alpha
+
+- **The route now anticipates colour changes properly.** Recipe colours sit at fixed distances below the grey level (green starts one gap below, yellow two gaps below), and the gap is about half of Classic's for the same recipe. That predicted the colour of all 41 Forever recipes checked against real data, so the planner knows roughly when each recipe will go from orange to yellow to green instead of guessing. Worst-case odds also assume the changes come two skill points sooner. What a recipe shows at your current skill, and what earlier scans saw, still override the model.
+- Route: "make" steps now take what you already hold into account. An intermediate you have crafted (for example Cured Medium Hide) is subtracted from what is left to make, the raw materials shrink with it, and a step you have fully covered shows as "have". The route's shopping list also shows what you hold and only totals what is still to buy.
+- The route refreshes when your bags change, so it follows you as you craft and buy.
+
 ## 0.1.3-alpha
 
 - **Fixed: the vendor Sell buttons never sold.** The two-click confirm remembered the row, but the rows are rebuilt on every refresh, so the second click never matched the first. It now remembers the item.

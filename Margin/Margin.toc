@@ -13,6 +13,7 @@ Core.lua
 VendorData.lua
 TrainerData.lua
 TaughtData.lua
+GapData.lua
 Prices.lua
 Taught.lua
 Scan.lua

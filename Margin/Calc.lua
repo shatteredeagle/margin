@@ -233,22 +233,25 @@ end
 function ns.RouteChance(r, s0, s)
   local H = r.trivial
   if not H or s >= H or r.diff == 3 then return 0 end
-  -- Where the colours change is unknown (only the grey level is). Typical odds put the next change
-  -- half way to grey; worst-case odds assume the colours fade sooner, a third of the way each.
-  local worst = ns.Opt("odds") ~= "typical"
-  local Y, G = -1, -1
+  -- Where the colours change. The game only tells us the grey level, but the colours sit at fixed
+  -- distances below it: green starts one gap below, yellow two gaps below. The gap is about half of
+  -- Classic's for the same recipe (checked against 41 Forever recipes: all matched); 12 points is
+  -- the typical gap where Classic has no entry (recipes only Forever has). Worst-case odds also
+  -- assume the colours change two points sooner than that.
+  local classic = ns.GAP and r.id and ns.GAP[r.id]
+  local w = classic and classic / 2 or 12
+  local early = ns.Opt("odds") ~= "typical" and 2 or 0
+  local Y = H - 2 * w - early
+  local G = H - w - early
+  -- what the game showed at the skill it was read: that is certain, so the edges must agree with it
   if r.diff == 0 then
-    if worst then
-      Y = s0 + (H - s0) / 3
-      G = s0 + (H - s0) * 2 / 3
-    else
-      Y = s0 + (H - s0) / 2
-      G = (Y + H) / 2
-    end
+    Y = math.max(Y, s0 + 1)                  -- orange now: yellow starts later
   elseif r.diff == 1 then
-    G = s0 + (H - s0) / (worst and 3 or 2)
+    Y = math.min(Y, s0); G = math.max(G, s0 + 1)
+  elseif r.diff == 2 then
+    Y = math.min(Y, s0); G = math.min(G, s0)
   end
-  -- What earlier scans showed narrows the guess: the edge is somewhere in [y1, y2] / [g1, g2].
+  -- and what earlier scans showed narrows it further: the edge is somewhere in [y1, y2] / [g1, g2]
   local b = MarginDB and MarginDB.bands and r.id and MarginDB.bands[r.id]
   if b then
     local function clamp(v, lo, hi)
@@ -256,10 +259,10 @@ function ns.RouteChance(r, s0, s)
       if hi and v > hi then v = hi end
       return v
     end
-    if r.diff == 0 then Y = clamp(Y, b.y1, b.y2) end
-    if r.diff <= 1 then G = clamp(G, b.g1, b.g2) end
-    if G < Y then G = Y end
+    Y = clamp(Y, b.y1, b.y2)
+    G = clamp(G, b.g1, b.g2)
   end
+  if G < Y then G = Y end
   if s < Y then return ns.Odds(0) end
   if s < G then return ns.Odds(1) end
   return ns.Odds(2)
@@ -289,23 +292,39 @@ function ns.ObserveBands(recipes, skill)
   end
 end
 
+-- What you hold of an item: bags and bank, plus AH purchases still in the mail.
+function ns.Owned(item)
+  local f = (C_Item and C_Item.GetItemCount) or GetItemCount
+  if not f then return 0 end
+  return (f(item, true) or 0) + (ns.Transit and ns.Transit(item) or 0)
+end
+
 -- Expand r x mult into base (non-crafted) materials, following craft-priced reagents. `prep`
 -- collects the intermediate crafts on the way, deepest first (what has to be made before what).
-local function expand(r, mult, idx, acc, prep)
+local function expand(r, mult, idx, acc, prep, left)
   for _, rg in ipairs(r.reagents) do
     local _, src = unitPrice(rg.item, idx, { [r.out or 0] = true })
     local sub = idx[rg.item]
     if src == "craft" and sub then
-      local units = mult * rg.count
-      expand(sub, units / sub.qty, idx, acc, prep) -- its own ingredients come first
+      local need = mult * rg.count
+      -- what you already hold of the intermediate counts first (shared across steps, in route order)
+      local use = 0
+      if left then
+        local have = left[rg.item]
+        if have == nil then have = ns.Owned(rg.item) end
+        use = math.min(have, need)
+        left[rg.item] = have - use
+      end
+      local units = need - use
+      if units > 0 then expand(sub, units / sub.qty, idx, acc, prep, left) end -- ingredients only for what is left to make
       if prep then
         local e = prep.byItem[rg.item]
         if not e then
-          e = { item = rg.item, recipe = sub, units = 0 }
+          e = { item = rg.item, recipe = sub, units = 0, used = 0 }
           prep.byItem[rg.item] = e
           prep.order[#prep.order + 1] = e
         end
-        e.units = e.units + units
+        e.units, e.used = e.units + units, e.used + use
       end
     else
       acc[rg.item] = (acc[rg.item] or 0) + mult * rg.count
@@ -417,16 +436,17 @@ function ns.Plan(prof, target, profs, useTrainer, force)
     end
   end
 
-  local acc = {}
+  local acc, left = {}, {}
   for _, seg in ipairs(segs) do
     if not seg.gap then
       local prep = { order = {}, byItem = {} }
-      expand(seg.row.r, math.ceil(seg.crafts), idx, acc, prep)
+      expand(seg.row.r, math.ceil(seg.crafts), idx, acc, prep, left)
       seg.prep = {} -- intermediates to make before this step, in order
       for _, e in ipairs(prep.order) do
         seg.prep[#seg.prep + 1] = {
           item = e.item, recipe = e.recipe,
           units = math.ceil(e.units - 1e-9), crafts = math.ceil(e.units / e.recipe.qty - 1e-9),
+          have = e.used, -- already in your bags or bank
           unit = ns.UnitPrice(e.item, idx), -- what one costs to make
         }
       end

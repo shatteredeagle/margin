@@ -616,19 +616,29 @@ local function routeEntries(plan)
       local n = math.ceil(seg.crafts)
       -- intermediates this step uses that are cheaper to make than to buy, made first
       for _, p in ipairs(seg.prep or {}) do
-        list[#list + 1] = {
-          icon = p.recipe.icon,
-          name = ("      |cff9fb4ffmake|r %s"):format(p.recipe.name),
-          cost = ("~%d crafts"):format(p.crafts),
-          sale = p.unit and (money(p.unit) .. " each") or "",
-          val = p.unit and money(p.unit * p.units) or "?",
-          craft = { id = p.recipe.id, count = p.crafts, profession = p.recipe.prof or profName, name = p.recipe.name },
-          tip = function(tt)
-            tt:AddLine(p.recipe.name)
-            tt:AddLine(("%d needed for %s; making them costs less than buying them."):format(p.units, r.name), 1, 1, 1, true)
-            tt:AddLine("Do this before the step below.", 0.7, 0.7, 0.7, true)
-          end,
-        }
+        if p.crafts > 0 then
+          list[#list + 1] = {
+            icon = p.recipe.icon,
+            name = ("      |cff9fb4ffmake|r %s%s"):format(p.recipe.name,
+              p.have > 0 and (" |cff909090(you have %d)|r"):format(p.have) or ""),
+            cost = ("~%d crafts"):format(p.crafts),
+            sale = p.unit and (money(p.unit) .. " each") or "",
+            val = p.unit and money(p.unit * p.units) or "?",
+            craft = { id = p.recipe.id, count = p.crafts, profession = p.recipe.prof or profName, name = p.recipe.name },
+            tip = function(tt)
+              tt:AddLine(p.recipe.name)
+              tt:AddLine(("%d needed for %s; making them costs less than buying them."):format(p.units + p.have, r.name), 1, 1, 1, true)
+              if p.have > 0 then tt:AddLine(("You already hold %d, so only %d are left to make."):format(p.have, p.units), 0.6, 1, 0.6, true) end
+              tt:AddLine("Do this before the step below.", 0.7, 0.7, 0.7, true)
+            end,
+          }
+        elseif p.have > 0 then -- everything needed is already in your bags
+          list[#list + 1] = {
+            icon = p.recipe.icon,
+            name = ("      |cff60ff60have|r %s |cff909090(%d in your bags)|r"):format(p.recipe.name, p.have),
+            cost = "", sale = "", val = "",
+          }
+        end
       end
       list[#list + 1] = {
         icon = r.icon, data = seg.row,
@@ -661,14 +671,27 @@ local function routeEntries(plan)
       }
     end
   end
-  list[#list + 1] = { name = "|cffffd700Shopping list|r", cost = "", sale = "", val = money(plan.shopCost) }
+  -- the shopping list: what the route needs, minus what you already hold
+  local shopRows, left = {}, 0
   for _, it in ipairs(plan.shop) do
+    local have = it.recipe and 0 or ns.Owned(it.item)
+    local buy = math.max(0, it.count - have)
+    if it.unit and not it.recipe then left = left + it.unit * buy end
+    shopRows[#shopRows + 1] = { it = it, have = have, buy = buy }
+  end
+  list[#list + 1] = { name = "|cffffd700Shopping list|r  |cff909090(still to buy)|r", cost = "", sale = "", val = money(left) }
+  for _, r in ipairs(shopRows) do
+    local it = r.it
     list[#list + 1] = {
-      icon = C_Item.GetItemIconByID(it.item), name = itemName(it.item),
-      cost = "x " .. it.count, sale = money(it.unit), val = money(it.unit and it.unit * it.count),
+      icon = C_Item.GetItemIconByID(it.item),
+      name = itemName(it.item) .. (r.have > 0 and (" |cff909090(have %d)|r"):format(r.have) or ""),
+      cost = r.buy == 0 and "|cff60ff60have enough|r" or ("x " .. r.buy),
+      sale = money(it.unit), val = money(it.unit and it.unit * r.buy),
       tip = function(tt)
         tt:AddLine(itemName(it.item))
         tt:AddDoubleLine("Source", it.src or "no price")
+        tt:AddDoubleLine("Route needs", it.count)
+        tt:AddDoubleLine("You hold", r.have)
       end,
     }
   end
