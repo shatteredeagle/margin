@@ -131,30 +131,52 @@ local function setCraftCount(count)
   return false
 end
 
+-- The recipe the profession window is showing now, or nil when it cannot be told.
+local function selectedRecipe()
+  local page = ProfessionsFrame and ProfessionsFrame.CraftingPage
+  local form = page and page.SchematicForm
+  local ok, info = pcall(function() return form and form.GetRecipeInfo and form:GetRecipeInfo() end)
+  return ok and info and info.recipeID or nil
+end
+
 function ns.OpenRecipe(id, count, professionName)
   local T = C_TradeSkillUI
   if not (T and T.OpenRecipe) then ns.Print("This client has no profession window API."); return end
-  local function openIt()
-    local ok = pcall(T.OpenRecipe, id)
-    if not ok then ns.Print("Could not open that recipe."); return end
-    C_Timer.After(0.25, function()
+
+  -- A window that has only just opened loads its list afterwards and resets to the first recipe,
+  -- so select the recipe, look at what is selected, and try again until it is the one we want.
+  local attempts = 0
+  local function select()
+    attempts = attempts + 1
+    if T.IsDataSourceChanging and T.IsDataSourceChanging() and attempts < 25 then
+      return C_Timer.After(0.2, select) -- still loading: not yet
+    end
+    pcall(T.OpenRecipe, id)
+    C_Timer.After(0.35, function()
+      local sel = selectedRecipe()
+      if sel ~= nil and sel ~= id and attempts < 10 then
+        return select() -- the window reset to its top recipe: again
+      end
       if not setCraftCount(count) and count then
         ns.Print(("Craft %d of it (the window has no quantity box here)."):format(count))
       end
+      if MarginDB and MarginDB.debug then ns.Print("[open] recipe", id, "selected", tostring(sel), "after", attempts, "tries") end
     end)
   end
+
   local function showing()
     local base = T.GetBaseProfessionInfo and T.GetBaseProfessionInfo()
     return T.IsTradeSkillReady and T.IsTradeSkillReady() and base and base.professionName == professionName
   end
-  if showing() then return openIt() end
+  if showing() then return select() end
+
   local prof = professionName and ns.Char().profs[professionName]
   if prof and prof.id and T.OpenTradeSkill then pcall(T.OpenTradeSkill, prof.id) end
   local tries = 0
   local function wait()
     tries = tries + 1
-    if showing() then return openIt() end
-    if tries < 12 then return C_Timer.After(0.25, wait) end
+    if showing() then return C_Timer.After(0.4, select) end -- give the list a moment to load
+    if tries < 14 then return C_Timer.After(0.25, wait) end
     ns.Print(("Open your %s window first, then click again."):format(professionName or "profession"))
   end
   C_Timer.After(0.25, wait)
