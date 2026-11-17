@@ -1,5 +1,6 @@
 -- Offline check of Calc.lua with stubbed prices. Run: lua tests/calc_test.lua
-local ns = { Opt = function() return 0.05 end }
+local resaleMode = "off"
+local ns = { Opt = function(k) if k == "resale" then return resaleMode end return 0.05 end }
 local prices = { [1] = {10, "vendor"}, [2] = {50, "ah"} }
 ns.VENDOR_SEED = {}
 ns.BuyPrice = function(id) local p = prices[id]; if p then return p[1], p[2] end end
@@ -71,4 +72,23 @@ assert(withT.cost == 200 + 80, withT.cost)                -- 2 pts x100 + 8 pts 
 Tr.train.fee = 100000
 local no2 = ns.Plan(pt, 20, { pt }, true)
 assert(#no2.learn == 0 and no2.cost == 1000)
+
+-- resale: A costs 140c and vendors for 300c; with resale on its net is -160c
+resaleMode = "vendor"
+local rr = ns.Evaluate({ recipes = { { out = 9, qty = 1, diff = 0, ups = 1, reagents = { {item = 1, count = 4}, {item = 2, count = 2} } } } })
+assert(rr[1].cost == 140 and rr[1].resale == 300 and rr[1].net == -160 and rr[1].perUp == -160)
+resaleMode = "ah" -- AH net 950
+rr = ns.Evaluate({ recipes = { { out = 9, qty = 1, diff = 0, ups = 1, reagents = { {item = 1, count = 4}, {item = 2, count = 2} } } } })
+assert(rr[1].resale == 950)
+-- the route prefers the recipe with the better NET: cheap-but-worthless vs dear-but-vendors-high
+resaleMode = "vendor"
+prices[5] = {10, "vendor"}; prices[6] = {100, "vendor"}
+local W = { id = 7, out = 8, qty = 1, diff = 0, ups = 1, trivial = 40, reagents = { {item = 5, count = 1} } }   -- 10c, no sale value
+local V = { id = 8, out = 9, qty = 1, diff = 0, ups = 1, trivial = 40, reagents = { {item = 6, count = 1} } }   -- 100c, sells 300c
+local pv = { skill = 10, max = 40, recipes = { W, V } }
+local plv = ns.Plan(pv, 12, { pv }, false)
+assert(plv.segs[1].row.r == V, "net-best recipe wins")
+assert(plv.cost == -400 and plv.gross == 200, plv.cost) -- 2 pts: net -200 each, gross 100 each
+resaleMode = "off"
+assert(ns.Plan(pv, 12, { pv }, false).segs[1].row.r == W, "off: gross-cheapest wins")
 print("calc ok")

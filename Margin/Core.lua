@@ -5,6 +5,7 @@ ns.defaults = {
   minAge = nil,       -- reserved: max Auctionator data age in days
   sortKey = "vendor", -- "vendor" or "ah"
   showAll = true,     -- list unprofitable / grey recipes too
+  resale = "vendor",  -- leveling cost minus what the result sells for: "vendor" | "ah" | "off"
   ahList = true,      -- open the shopping list beside the auction house
   useTrainer = true,  -- route may include recipes you still have to learn from a trainer
 }

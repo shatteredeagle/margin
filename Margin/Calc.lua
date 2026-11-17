@@ -62,6 +62,16 @@ function ns.Revenue(r)
   return vend, ah
 end
 
+-- What selling the crafted item gives back, per the "resale" option: "vendor" (the
+-- vendor sale price), "ah" (the AH price after the cut, vendor when it has none),
+-- or "off". Subtracted from the reagent cost for leveling.
+function ns.ResaleValue(vend, ah)
+  local mode = ns.Opt("resale")
+  if mode == "off" then return 0 end
+  if mode == "ah" then return ah or vend or 0 end
+  return vend or 0
+end
+
 -- One row per craftable recipe with cost, both profit figures and cost per skill-up.
 function ns.Evaluate(prof, profs, includeTrainer)
   local rows = {}
@@ -76,12 +86,14 @@ function ns.Evaluate(prof, profs, includeTrainer)
     local cost, lines, missing = ns.RecipeCost(r, idx)
     local vend, ah = ns.Revenue(r)
     local chance = (CHANCE[r.diff] or 0) * r.ups
+    local resale = ns.ResaleValue(vend, ah)
     rows[#rows + 1] = {
       r = r, cost = cost, lines = lines, missing = missing,
       vendorProfit = vend and (vend - cost) or nil,
       ahProfit = ah and (ah - cost) or nil,
       chance = chance,
-      perUp = chance > 0 and cost / chance or nil,
+      resale = resale, net = cost - resale, -- reagents minus what the result sells for
+      perUp = chance > 0 and (cost - resale) / chance or nil,
     }
   end
   return rows
@@ -189,14 +201,14 @@ end
 -- point is optimal). `skip` is a set of rows that may not be used.
 local function route(rows, s0, target, skip)
   local segs, cur = {}, nil
-  local total, crafts = 0, 0
+  local total, crafts, gross = 0, 0, 0
   for s = s0, target - 1 do
     local best, bestPer, bestCh
     for _, row in ipairs(rows) do
       if row.missing == 0 and not skip[row] then
         local ch = chanceAt(row.r, s0, s) * row.r.ups
         if ch > 0 then
-          local per = row.cost / ch
+          local per = row.net / ch
           if not best or per < bestPer or (per == bestPer and ch > bestCh) then
             best, bestPer, bestCh = row, per, ch
           end
@@ -211,6 +223,7 @@ local function route(rows, s0, target, skip)
         segs[#segs + 1] = cur
       end
       total = total + bestPer
+      gross = gross + best.cost / bestCh
       crafts = crafts + 1 / bestCh
     else
       if cur and cur.gap then
@@ -221,7 +234,7 @@ local function route(rows, s0, target, skip)
       end
     end
   end
-  return segs, total, crafts
+  return segs, total, crafts, gross
 end
 
 -- Cheapest route from the scanned skill up to target, with a shopping list.
@@ -233,9 +246,9 @@ function ns.Plan(prof, target, profs, useTrainer)
   local rows = ns.Evaluate(prof, profs, useTrainer)
   local s0 = prof.skill
   local skip = {}
-  local segs, total, crafts
+  local segs, total, crafts, gross
   while true do
-    segs, total, crafts = route(rows, s0, target, skip)
+    segs, total, crafts, gross = route(rows, s0, target, skip)
     local used = {}
     for _, seg in ipairs(segs) do
       if not seg.gap and seg.row.r.train then used[seg.row] = true end
@@ -276,6 +289,6 @@ function ns.Plan(prof, target, profs, useTrainer)
     if unit then shopCost = shopCost + unit * n end
   end
   table.sort(shop, function(a, b) return (a.unit or 0) * a.count > (b.unit or 0) * b.count end)
-  return { segs = segs, cost = total, crafts = crafts, shop = shop, shopCost = shopCost,
+  return { segs = segs, cost = total, gross = gross, crafts = crafts, shop = shop, shopCost = shopCost,
     target = target, learn = learn, learnCost = learnCost }
 end

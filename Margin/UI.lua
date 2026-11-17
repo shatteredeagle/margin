@@ -9,7 +9,7 @@ local DIFF_COLOR = { [0] = "ff8040", [1] = "ffff00", [2] = "40c040", [3] = "9090
 
 local HEADERS = {
   profit = { "Recipe", "Cost", nil, "Profit" },
-  level = { "Recipe", "Cost", nil, "Cost / skill-up" },
+  level = { "Recipe", "Cost", nil, "Net / skill-up" },
   route = { "Skill  recipe / shopping list", "Crafts / qty", "Per unit", "Cost" },
 }
 
@@ -132,7 +132,12 @@ local function build()
     setOffset(0)
   end)
   frame.tSort = button(376, 110, "", function()
-    ns.SetOpt("sortKey", ns.Opt("sortKey") == "vendor" and "ah" or "vendor")
+    if tab == "profit" then
+      ns.SetOpt("sortKey", ns.Opt("sortKey") == "vendor" and "ah" or "vendor")
+    else -- leveling and route: what the crafted item is assumed to sell for
+      local nxt = { vendor = "ah", ah = "off", off = "vendor" }
+      ns.SetOpt("resale", nxt[ns.Opt("resale")] or "vendor")
+    end
     ns.RefreshUI()
   end)
   frame.tAll = button(490, 152, "", function()
@@ -331,7 +336,11 @@ function ns.RefreshUI()
   if not profName or not profs[profName] then profName = next(profs) end
   local prof = profName and profs[profName]
   local key, showAll = ns.Opt("sortKey"), ns.Opt("showAll")
-  frame.tSort:SetText(key == "ah" and "Sell: AH" or "Sell: vendor")
+  if tab == "profit" then
+    frame.tSort:SetText(key == "ah" and "Sell: AH" or "Sell: vendor")
+  else
+    frame.tSort:SetText("Resale: " .. (ns.Opt("resale") or "vendor"))
+  end
   if tab == "route" then
     frame.tAll:SetText(ns.Opt("useTrainer") and "Trainer recipes: on" or "Trainer recipes: off")
   else
@@ -343,6 +352,7 @@ function ns.RefreshUI()
   frame.tProf:SetEnabled(count > 1)
   local h = HEADERS[tab]
   local titles = { h[1], h[2], h[3] or (key == "ah" and "AH (net)" or "Vendor"), h[4] }
+  if tab == "level" and ns.Opt("resale") == "off" then titles[4] = "Cost / skill-up" end
   for i = 1, 4 do
     local arrow = (tab ~= "route" and sortCol == i) and (sortAsc and " ^" or " v") or ""
     frame.hdr[i].text:SetText(titles[i] .. arrow)
@@ -355,8 +365,10 @@ function ns.RefreshUI()
     if tab == "route" then
       local plan, target
       list, plan, target = routeEntries(prof)
-      frame.info:SetText(("%s %d/%d  -  route to %d: ~%d crafts, %s + %s fees"):format(
-        profName, prof.skill, prof.max, target, math.ceil(plan.crafts), money(plan.cost), money(plan.learnCost)))
+      local resale = ns.Opt("resale") ~= "off"
+      frame.info:SetText(("%s %d/%d  -  route to %d: ~%d crafts, %s%s + %s fees"):format(
+        profName, prof.skill, prof.max, target, math.ceil(plan.crafts),
+        money(resale and plan.cost or plan.gross), resale and " net" or "", money(plan.learnCost)))
     else
       local rows = ns.Evaluate(prof)
       local src
