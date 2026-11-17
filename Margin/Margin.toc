@@ -3,6 +3,7 @@
 ## Notes: Profitable crafts, cheapest leveling routes and shopping lists for your tradeskills. Uses Auctionator prices when installed. Built for WoW Forever.
 ## Author: jesse
 ## X-License: MIT
+## X-Website: https://github.com/shatteredeagle/margin
 ## Version: 0.1.0
 ## OptionalDeps: Auctionator, Polestar
 ## SavedVariables: MarginDB

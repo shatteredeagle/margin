@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Lua 5.1 (the WoW client's Lua)
+        run: sudo apt-get update && sudo apt-get install -y lua5.1
+      - name: Syntax check every addon file
+        run: |
+          for f in Margin/*.lua; do luac5.1 -p "$f" || exit 1; done
+      - name: Every .lua file is in the .toc, and every .toc entry exists
+        run: |
+          cd Margin
+          grep -E '^[A-Za-z0-9_./\\-]+\.lua\s*$' Margin.toc | tr -d '\r' | sed 's/\\/\//g' | sort > /tmp/listed
+          ls *.lua | sort > /tmp/present
+          diff /tmp/listed /tmp/present
+      - name: Offline tests (route planner, pricing)
+        run: lua5.1 tests/calc_test.lua
+
+  release:
+    needs: test
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the zip
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          rm -rf build && mkdir -p build
+          cp -r Margin build/Margin
+          sed -i "s/^## Version: .*/## Version: ${VERSION}/" build/Margin/Margin.toc
+          cp LICENSE THIRD_PARTY.md build/Margin/
+          (cd build && zip -qr "../Margin-${VERSION}.zip" Margin)
+          INTERFACE=$(sed -n 's/^## Interface: *\([0-9]*\).*/\1/p' Margin/Margin.toc | head -1)
+          cat > release.json <<JSON
+          {"releases":[{"name":"Margin","version":"${VERSION}","filename":"Margin-${VERSION}.zip","nolib":false,"metadata":[{"flavor":"classic","interface":${INTERFACE}}]}]}
+          JSON
+          echo "VERSION=${VERSION}" >> "$GITHUB_ENV"
+      - name: Release notes from CHANGELOG.md
+        run: |
+          awk -v v="## ${VERSION}" '$0 == v {on=1; next} /^## / {on=0} on' CHANGELOG.md > notes.md
+          if [ ! -s notes.md ]; then echo "See CHANGELOG.md." > notes.md; fi
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          PRE=""
+          case "$VERSION" in *-*) PRE="--prerelease" ;; esac
+          gh release create "$GITHUB_REF_NAME" "Margin-${VERSION}.zip" release.json \
+            --title "Margin ${VERSION}" --notes-file notes.md $PRE

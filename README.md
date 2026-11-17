@@ -1,32 +1,46 @@
 # Margin
 
-WoW Forever addon: shows profitable crafts and the cheapest recipes to level a profession, priced from Auctionator (no scanner of its own).
+Tradeskill profit, cheapest leveling route and shopping lists for **WoW Forever**.
 
-- `/margin` opens the window. Open each profession once so it gets scanned.
-- Profit tab: reagents bought at the cheaper of vendor / AH price, results sold to a vendor or on the AH (after the cut, `/margin cut 5`).
-- Leveling tab: cost per expected skill-up (orange 100%, yellow 75%, green 25%).
-- Vendor reagent prices: Auctionator's merchant cache wins; a bundled table (threads, salt, vials, dyes, spices, flux...) fills in the rest. Regenerate it with `tools/gen_vendor.py` (see its docstring).
+## Install
 
-MIT licensed.
+- **By hand:** download `Margin-<version>.zip` from the [Releases](../../releases) page and extract the `Margin` folder into your `Interface/AddOns` folder.
+- **Addon manager:** point any manager that installs from GitHub releases at `https://github.com/shatteredeagle/margin`.
 
-Trainer recipes: the Route tab can include recipes you still have to learn, using Forever trainer data
-from Efficient Games' EG Link output (CC BY 4.0, see THIRD_PARTY.md). Coverage is partial: only trainers
-players have opened are listed. Toggle it with the "Trainer recipes" button on the Route tab.
+Updates are new releases. Type `/margin` in game, or use the Margin button on a profession window. Open each profession once so Margin can scan it.
 
-Recipes taught by items (patterns, plans, recipes): when Polestar is installed, Margin reads its Codex to find
-which item teaches each craft and the skill it needs, prices that item from the AH (or an open vendor), and lets
-the route include it. Without Polestar those recipes are simply not considered. The AH button also searches for
-those pattern items so they get priced.
+## What it does
 
-AH purchases are credited when the AH confirms them, so shopping-list items are ticked off before the mail arrives.
+- **Profit tab:** every recipe you know, priced from the cheapest source for each reagent (vendor, auction house, or crafting it yourself), against what the result sells for.
+- **Leveling tab:** cost per expected skill-up, net of what the crafts sell for.
+- **Route tab:** the cheapest path from your skill to your target, with a shopping list and cards that compare the route under each pricing option. It can include recipes you have not learned yet (trainer recipes and patterns you can buy).
+- **At the auction house:** a shopping list with one-click Search that fills in the quantity, an "unpriced" button that looks up only the items Margin needs, and purchases ticked off as the AH confirms them.
+- **At a vendor:** buy everything the route still needs (never more than needed), and sell the route's crafted items.
+- Click a Route row to open that recipe in the profession window with the craft count filled in.
+
+## Settings
+
+| Command | Does |
+|---|---|
+| `/margin` | open the window |
+| `/margin route 140` | set the route's target skill |
+| `/margin rep` | toggle "My reputation" (default off: base, worst-case prices) |
+| `/margin cut 5` | AH cut in percent |
+| `/margin chance 80` | how often an AH listing sells (the deposit is lost when it does not) |
+| `/margin buy`, `/margin list` | toggle the vendor popup / the AH shopping list |
+| `/margin coverage` | which professions have trainer data |
+| `/margin debug` | print what Margin is doing |
 
 ## Dependencies
 
-None required. Auctionator (prices, AH search) and Polestar (extra recipe-item data) are used when installed.
-Without Auctionator, Margin records the cheapest price it sees in its own AH searches ("Margin: N unpriced"
-button) and the prices of vendors you open. Bundled data: vendor reagent prices, trainer recipes and which item
-teaches which recipe (see THIRD_PARTY.md and `tools/`).
+None required. [Auctionator](https://www.curseforge.com/wow/addons/auctionator) (prices, AH search) and Polestar (extra recipe-item data) are used when installed. Without Auctionator, Margin records the cheapest price it sees in its own searches and the prices of vendors you open.
 
-Reputation: by default Margin uses base (worst-case) vendor prices and treats reputation-locked patterns as out
-of reach. The "My reputation" checkbox (or `/margin rep`) uses the lowest price you were charged at vendors you
-opened and counts patterns whose reputation you have reached. Trainer fees always use base prices.
+## Data and credits
+
+Bundled data and where it comes from is in [THIRD_PARTY.md](THIRD_PARTY.md); the generators are in `tools/`. Trainer and vendor data is from Efficient Games' EG Link output for WoW: Forever (CC BY 4.0).
+
+## Development
+
+`lua5.1 tests/calc_test.lua` runs the offline tests; CI also syntax-checks every file. Pushing a tag like `v0.2.0` builds the zip and publishes a release (a tag with a `-` in it, like `v0.2.0-beta`, is marked a pre-release). Release notes come from `CHANGELOG.md`.
+
+MIT licensed.
