@@ -22,6 +22,11 @@ jobs:
           grep -E '^[A-Za-z0-9_./\\-]+\.lua\s*$' Margin.toc | tr -d '\r' | sed 's/\\/\//g' | sort > /tmp/listed
           ls *.lua | sort > /tmp/present
           diff /tmp/listed /tmp/present
+      - name: No unknown globals (a function used but never defined)
+        run: |
+          for f in Margin/*.lua; do luac5.1 -l -p "$f" | awk '/GETGLOBAL|SETGLOBAL/ {print $NF}'; done | sort -u > /tmp/used
+          unknown=$(comm -23 /tmp/used <(sort tests/allowed_globals.txt))
+          if [ -n "$unknown" ]; then echo "Unknown globals (add real WoW APIs to tests/allowed_globals.txt):"; echo "$unknown"; exit 1; fi
       - name: Offline tests (route planner, pricing)
         run: lua5.1 tests/calc_test.lua
 

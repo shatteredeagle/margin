@@ -10,9 +10,10 @@ local button
 
 local function book() return ProfessionsFrame or TradeSkillFrame end
 
+-- { left, bottom, right, top } of a frame, or nil when it has no position yet.
 local function rectOf(f)
   local ok, l, b, w, h = pcall(f.GetRect, f)
-  if ok and l and w then return l, b, l + w, b + h end
+  if ok and l and w then return { l, b, l + w, b + h } end
 end
 
 local function overlap(a, b, pad)
@@ -56,8 +57,9 @@ end
 
 -- Where the button would be for an anchor (only the four anchor kinds used below).
 local function candidateRect(point, rel, relPoint, x, y, w, h)
-  local l, b, r, t = rectOf(rel)
-  if not l then return nil end
+  local rr = rectOf(rel)
+  if not rr then return nil end
+  local l, b, r, t = rr[1], rr[2], rr[3], rr[4]
   local ax = (relPoint:find("LEFT") and l) or (relPoint:find("RIGHT") and r) or (l + r) / 2
   local ay = (relPoint:find("TOP") and t) or (relPoint:find("BOTTOM") and b) or (b + t) / 2
   local tx, ty = ax + x, ay + y

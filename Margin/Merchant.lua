@@ -207,6 +207,9 @@ local function sellTotals(rows)
   return n, v
 end
 
+local function lotsFor(r) return math.ceil(r.buy / r.stack) end
+local function buyable(r) return r.buy > 0 and not r.cheaper and not (r.avail == 0) end
+
 ---------------------------------------------------------------------------
 -- Buying
 ---------------------------------------------------------------------------
