@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Vendor prices now include food and drink sold by vendors (bread, water, milk, juice), so cooking recipes that use them can be priced.
+
 ## 0.1.4-alpha
 
 - **The route now anticipates colour changes properly.** Recipe colours sit at fixed distances below the grey level (green starts one gap below, yellow two gaps below), and the gap is about half of Classic's for the same recipe. That predicted the colour of all 41 Forever recipes checked against real data, so the planner knows roughly when each recipe will go from orange to yellow to green instead of guessing. Worst-case odds also assume the changes come two skill points sooner. What a recipe shows at your current skill, and what earlier scans saw, still override the model.

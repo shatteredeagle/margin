@@ -3,7 +3,7 @@
 
 Two sources, Forever's own first:
  1. EG Link output for WoW: Forever (Efficient Games, CC BY 4.0), vendors.json: every unlimited
-    plain-gold item entry of trade goods / reagents (item class 7 / 5), price / stack, highest seen
+    plain-gold item entry of trade goods / reagents (item class 7 trade goods, 5 reagents, 0 consumables: food and water are cooking ingredients), price / stack, highest seen
     (the base price: reputation discounts only lower it).
  2. Blizzard Classic Era ItemSparse, BuyPrice / VendorStackCount, for the names in EXTRA that no
     opened vendor has shown yet.
@@ -31,7 +31,7 @@ prices = {}  # item -> (unit price, name, source)
 for v in data["vendors"].values():
     for key, e in (v.get("entries") or {}).items():
         item = e.get("itemId")
-        if not key.startswith("item:") or klass.get(item) not in (7, 5):
+        if not key.startswith("item:") or klass.get(item) not in (7, 5, 0):
             continue
         if e.get("limited") or e.get("costItems") or not e.get("costs"):
             continue
