@@ -31,6 +31,14 @@ local function money(c)
 end
 ns.Money = money
 
+-- Net cost (reagents minus what the crafts sell for): negative means you come out ahead,
+-- so it is green, unlike a negative profit, which is red.
+local function netMoney(c)
+  if c == nil then return "?" end
+  if c >= 0 then return money(c) end
+  return "|cff60ff60-|r" .. money(-c)
+end
+
 -- Same amount without colour codes, so a delta can be tinted as a whole.
 local function plainMoney(c)
   c = math.floor(math.abs(c) + 0.5)
@@ -67,6 +75,9 @@ local function recipeTooltip(d)
   GameTooltip:AddDoubleLine("Vendor sale", money(vend))
   GameTooltip:AddDoubleLine("AH sale (net)", money(ah))
   GameTooltip:AddDoubleLine("Skill-up chance", ("%d%%"):format((ns.CHANCE[d.r.diff] or 0) * 100))
+  if d.net and (ns.Opt("resale") or "off") ~= "off" then
+    GameTooltip:AddDoubleLine("Net per craft (cost - resale)", d.net < 0 and ("|cff60ff60-|r" .. money(-d.net) .. " |cff60ff60profit|r") or money(d.net))
+  end
 end
 
 function ns.SortBy(col, btn)
@@ -313,7 +324,7 @@ local function recipeEntry(d, kind, key)
       e.val = money(e.sortVal)
     elseif d.perUp then
       e.sortVal = d.perUp
-      e.val = money(d.perUp)
+      e.val = netMoney(d.perUp)
     else
       e.val = "|cff909090no skill-up|r"
     end
@@ -377,7 +388,7 @@ local function routeEntries(plan)
         name = ("%d-%d  |cff%s%s|r%s"):format(seg.from, seg.to,
           seg.row.learn and DIFF_COLOR[0] or (DIFF_COLOR[r.diff] or "ffffff"), r.name,
           seg.row.learn and " |cff80c0ff(learn)|r" or ""),
-        cost = ("~%d crafts"):format(n), sale = money(seg.row.cost), val = money(seg.cost),
+        cost = ("~%d crafts"):format(n), sale = money(seg.row.cost), val = netMoney(seg.cost),
       }
     end
   end
@@ -499,7 +510,7 @@ redraw = function()
         local d = cache.cards[i]
         c.action = d.action
         c.label:SetText(d.label)
-        c.value:SetText(money(d.total))
+        c.value:SetText(netMoney(d.total))
         c.sub:SetText(("~%d crafts"):format(math.ceil(d.plan.crafts)))
         c.edge:SetShown(d.selected)
         if d.selected then
