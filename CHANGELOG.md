@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- One sign convention for money you earn or lose: green + when you come out ahead, red - when you lose money. It applies to the Profit column, "Net / skill-up" on Leveling, the Route steps and comparison cards (the difference to the selected option now reads + when it is better for you), and the recipe tooltip. Plain costs (Cost columns, shopping list, fees) stay unsigned.
+
 - Margin now learns when each recipe changes colour: every scan records the colour it saw, and where a recipe changed between scans the planner uses the narrowed range instead of the one-third guess. It tightens as you level and is shared by all your characters.
 
 - The profession-window Margin button now shows at a default spot even if looking for a better one fails.

@@ -13,7 +13,7 @@ local DIFF_COLOR = { [0] = "ff8040", [1] = "ffff00", [2] = "40c040", [3] = "9090
 local HEADERS = {
   profit = { "Recipe", "Cost", nil, "Profit" },
   level = { "Recipe", "Cost", nil, "Net / skill-up" },
-  route = { "Skill  recipe / shopping list", "Crafts / qty", "Per unit", "Cost" },
+  route = { "Skill  recipe / shopping list", "Crafts / qty", "Per unit", "Net" },
 }
 
 -- Own formatter: GetCoinTextureString is not available on Forever.
@@ -31,12 +31,13 @@ local function money(c)
 end
 ns.Money = money
 
--- Net cost (reagents minus what the crafts sell for): negative means you come out ahead,
--- so it is green, unlike a negative profit, which is red.
-local function netMoney(c)
-  if c == nil then return "?" end
-  if c >= 0 then return money(c) end
-  return "|cff60ff60-|r" .. money(-c)
+-- Profit or loss, the same way everywhere: green + when you come out ahead, red - when you lose money.
+local function signed(profit)
+  if profit == nil then return "?" end
+  local r = math.floor(math.abs(profit) + 0.5)
+  if r == 0 then return money(0) end
+  if profit > 0 then return "|cff60ff60+|r" .. money(r) end
+  return "|cffff6060-|r" .. money(r)
 end
 
 -- Same amount without colour codes, so a delta can be tinted as a whole.
@@ -77,7 +78,7 @@ local function recipeTooltip(d)
   GameTooltip:AddDoubleLine(ns.Opt("odds") == "typical" and "Skill-up chance (typical)" or "Skill-up chance (worst case)",
     ("%d%%"):format(ns.Odds(d.r.diff) * 100))
   if d.net and (ns.Opt("resale") or "off") ~= "off" then
-    GameTooltip:AddDoubleLine("Net per craft (cost - resale)", d.net < 0 and ("|cff60ff60-|r" .. money(-d.net) .. " |cff60ff60profit|r") or money(d.net))
+    GameTooltip:AddDoubleLine("Net per craft (resale - cost)", signed(-d.net))
   end
 end
 
@@ -501,10 +502,10 @@ local function recipeEntry(d, kind, key)
       e.val = "|cff909090makes no item|r" -- enchants and the like have nothing to sell
     elseif kind == "profit" then
       e.sortVal = key == "ah" and d.ahProfit or d.vendorProfit
-      e.val = money(e.sortVal)
+      e.val = signed(e.sortVal)
     elseif d.perUp then
       e.sortVal = d.perUp
-      e.val = netMoney(d.perUp)
+      e.val = signed(-d.perUp)
     else
       e.val = "|cff909090no skill-up|r"
     end
@@ -634,7 +635,7 @@ local function routeEntries(plan)
         name = ("%d-%d  |cff%s%s|r%s"):format(seg.from, seg.to,
           seg.row.learn and DIFF_COLOR[0] or (DIFF_COLOR[r.diff] or "ffffff"), r.name,
           seg.row.learn and " |cff80c0ff(learn)|r" or ""),
-        cost = ("~%d crafts"):format(n), sale = money(seg.row.cost), val = netMoney(seg.cost),
+        cost = ("~%d crafts"):format(n), sale = money(seg.row.cost), val = signed(-seg.cost),
         craft = { id = r.id, count = n, profession = profName, name = r.name, learnFirst = seg.row.learn ~= nil },
       }
     end
@@ -764,7 +765,7 @@ redraw = function()
         local d = cache.cards[i]
         c.action = d.action
         c.label:SetText(d.label)
-        c.value:SetText(netMoney(d.total))
+        c.value:SetText(signed(-d.total))
         c.sub:SetText(("~%d crafts"):format(math.ceil(d.plan.crafts)))
         c.edge:SetShown(d.selected)
         if d.selected then
@@ -774,7 +775,8 @@ redraw = function()
           if diff == 0 then
             c.delta:SetText("same")
           else
-            c.delta:SetText(("|cff%s%s%s|r"):format(diff > 0 and "ff6060" or "60ff60", diff > 0 and "+" or "-", plainMoney(diff)))
+            -- how much better (+, green) or worse (-, red) off than the selected option you would be
+            c.delta:SetText(("|cff%s%s%s|r"):format(diff > 0 and "ff6060" or "60ff60", diff > 0 and "-" or "+", plainMoney(diff)))
           end
         end
         c:Show()
