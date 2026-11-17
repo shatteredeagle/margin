@@ -183,8 +183,14 @@ end
 function ns.MissingItems(profs, includeOutputs, includeRecipes)
   local idx = craftIndex(profs)
   local out, seen = {}, {}
+  local recent = time() - 12 * 3600
+  local searched = MarginDB and MarginDB.searched or {}
   local function add(id)
-    if id and not seen[id] then seen[id] = true; out[#out + 1] = id end
+    -- an item looked up in the last 12 hours that still has no price has no listing: do not nag
+    if id and not seen[id] and not (searched[id] and searched[id] > recent) then
+      seen[id] = true
+      out[#out + 1] = id
+    end
   end
   for _, prof in pairs(profs) do
     for _, r in ipairs(prof.recipes) do
@@ -194,9 +200,16 @@ function ns.MissingItems(profs, includeOutputs, includeRecipes)
       if includeOutputs and r.out and not ns.AHPrice(r.out) then add(r.out) end
     end
     -- recipe items (patterns, plans) that teach an unlearned craft and have no price yet
+    -- (only for recipes whose reagents are all priced: otherwise the route could not use them anyway)
     for _, r in ipairs(includeRecipes and prof.unlearned or {}) do
       if r.teach and not ns.TeachOption(r) then
-        for _, o in ipairs(r.teach) do if o.rank <= (prof.max or 0) then add(o.item) end end
+        local usable = true
+        for _, rg in ipairs(r.reagents) do
+          if not ns.UnitPrice(rg.item, idx) then usable = false; break end
+        end
+        if usable then
+          for _, o in ipairs(r.teach) do if o.rank <= (prof.max or 0) then add(o.item) end end
+        end
       end
     end
   end
@@ -404,4 +417,13 @@ function ns.ForceFromPicks(picks)
     for s = p.from, p.to - 1 do f[s] = p.id end
   end
   return f
+end
+
+-- Items looked up recently that still have no price (nobody lists them).
+function ns.SearchedUnpriced()
+  local n, recent = 0, time() - 12 * 3600
+  for id, t in pairs(MarginDB and MarginDB.searched or {}) do
+    if t > recent and not ns.AHPrice(id) then n = n + 1 end
+  end
+  return n
 end

@@ -48,9 +48,12 @@ local function teachOptions(C, id, base)
     seen[itemID] = true
     local info = ns.RecipeItemInfo(itemID, base.professionName)
     if not info then missingTips = missingTips + 1 end
+    local rank = info and (info.rank or 0) or fallbackRank or 0
+    -- a pattern you cannot learn before your skill cap is not part of any route you can walk now.
+    -- (A rank taken from the Era table can be up to ~25 higher than Forever's, so allow some slack.)
+    if rank > (base.maxSkillLevel or 0) + (info and 0 or 30) then return end
     out[#out + 1] = {
-      item = itemID,
-      rank = info and (info.rank or 0) or fallbackRank or 0,
+      item = itemID, rank = rank,
       rep = info and info.rep or repHint or false,
       repFaction = info and info.repFaction, repStanding = info and info.repStanding,
     }

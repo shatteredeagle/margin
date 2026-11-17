@@ -128,6 +128,8 @@ local function nextScan()
     return
   end
   local token = {}
+  MarginDB.searched = MarginDB.searched or {}
+  MarginDB.searched[item] = time()
   scanning, scanToken = item, token
   search(item, nil)
   C_Timer.After(6, function() -- an item with no listing may never answer

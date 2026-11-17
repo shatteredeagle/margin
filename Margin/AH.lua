@@ -13,10 +13,20 @@ local function updateText()
   button:SetText(("Margin: %d unpriced"):format(#missing(false)))
 end
 
+local function markSearched(ids)
+  MarginDB.searched = MarginDB.searched or {}
+  local now = time()
+  for _, id in ipairs(ids) do MarginDB.searched[id] = now end
+  -- results arrive a little later; recount then
+  C_Timer.After(4, updateText)
+  C_Timer.After(15, updateText)
+end
+
 local function search(includeOutputs)
   local ids = missing(includeOutputs)
   local A = Auctionator and Auctionator.API and Auctionator.API.v1
   if not (A and A.MultiSearchExact) then
+    markSearched(ids)
     ns.ScanItems(ids) -- no Auctionator: Margin looks the items up itself
     return
   end
@@ -31,6 +41,7 @@ local function search(includeOutputs)
   end
   local ok, err = pcall(A.MultiSearchExact, "Margin", names)
   if not ok then ns.Print("Search failed:", tostring(err)); return end
+  markSearched(ids)
   ns.Print(("Searching %d items%s."):format(#names, loading > 0 and (", " .. loading .. " names still loading") or ""))
 end
 
@@ -38,12 +49,25 @@ local function build(parent)
   button = CreateFrame("Button", "MarginAHButton", parent, "UIPanelButtonTemplate")
   button:SetSize(170, 22)
   button:SetPoint("BOTTOMRIGHT", parent, "TOPRIGHT", -8, 2)
-  button:SetScript("OnClick", function() search(IsShiftKeyDown()) end)
+  button:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+  button:SetScript("OnClick", function(_, btn)
+    if btn == "RightButton" then
+      MarginDB.searched = nil -- forget what was already searched
+      updateText()
+      return ns.Print("Forgot earlier searches; every unpriced item counts again.")
+    end
+    search(IsShiftKeyDown())
+  end)
   button:SetScript("OnEnter", function(self)
     GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
     GameTooltip:AddLine("Margin")
     GameTooltip:AddLine("Searches only the reagents Margin has no price for.", 1, 1, 1, true)
     GameTooltip:AddLine("Shift-click: also unpriced crafted results.", 0.7, 0.7, 0.7, true)
+    local none = ns.SearchedUnpriced()
+    if none > 0 then
+      GameTooltip:AddLine(("%d searched in the last 12 hours have no listing and are not counted."):format(none), 1, 0.82, 0, true)
+      GameTooltip:AddLine("Right-click: count them again.", 0.7, 0.7, 0.7, true)
+    end
     GameTooltip:Show()
   end)
   button:SetScript("OnLeave", GameTooltip_Hide)

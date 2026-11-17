@@ -1,3 +1,4 @@
+time = os.time -- the WoW global
 -- Offline check of Calc.lua with stubbed prices. Run: lua tests/calc_test.lua
 local resaleMode = "off"
 local oddsMode = "typical"
@@ -174,4 +175,16 @@ local rowsYw = ns.Evaluate(pyw, { pyw })
 assert(rowsYw[1].chance == 0.25 and rowsYw[1].perUp == 40, rowsYw[1].perUp)
 oddsMode = "typical"
 assert(ns.Evaluate(pyw, { pyw })[1].chance == 0.75)
+
+-- unpriced patterns: skipped when the recipe's reagents cannot be priced, and when searched recently
+MarginDB = { searched = {} }
+local T3 = { id = 90, out = 91, qty = 1, diff = 0, ups = 1, trivial = 60, reagents = { {item = 1, count = 1} },
+  teach = { { item = 61, rank = 20, rep = false } } }
+local T4 = { id = 92, out = 93, qty = 1, diff = 0, ups = 1, trivial = 60, reagents = { {item = 998, count = 1} },
+  teach = { { item = 62, rank = 20, rep = false } } }
+local pm = { skill = 10, max = 60, recipes = {}, unlearned = { T3, T4 } }
+local m1 = ns.MissingItems({ pm }, false, true)
+assert(#m1 == 1 and m1[1] == 61, "only the usable recipe's pattern")
+MarginDB.searched[61] = time()
+assert(#ns.MissingItems({ pm }, false, true) == 0, "recently searched items are not counted again")
 print("calc ok")
