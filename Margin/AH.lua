@@ -19,9 +19,20 @@ local function missing(includeOutputs)
     scanProfession())
 end
 
+-- A lookup works through the unpriced items in rounds of ROUND, one after another, until none are
+-- left (or MAX_ROUNDS, or you click the button again to stop it). Each round waits for the previous
+-- search to finish, then pauses a moment, so the AH is never hammered.
+local running, runToken, awaiting, rounds, runOutputs = false, nil, nil, 0, false
+local MAX_ROUNDS = 30
+local PAUSE = 1.5
+
 local function updateText()
   if not button then return end
-  button:SetText(("Margin: %d unpriced"):format(#missing(false)))
+  if running then
+    button:SetText(("Margin: %d left (click to stop)"):format(#missing(runOutputs)))
+  else
+    button:SetText(("Margin: %d unpriced"):format(#missing(false)))
+  end
 end
 
 local function markSearched(ids)
@@ -33,32 +44,96 @@ local function markSearched(ids)
   C_Timer.After(15, updateText)
 end
 
-local function search(includeOutputs)
-  local ids = missing(includeOutputs)
-  if #ids > ROUND then
-    local rest = #ids - ROUND
-    for i = #ids, ROUND + 1, -1 do ids[i] = nil end
-    ns.Print(("%d items this round, %d more: click again after it finishes."):format(ROUND, rest))
+-- Auctionator says when a search ends (its event bus); without that we cannot chain rounds.
+local hooked, canChain
+local listener = {}
+function listener.ReceiveEvent(_, eventName)
+  local E = Auctionator and Auctionator.Shopping and Auctionator.Shopping.Tab and Auctionator.Shopping.Tab.Events
+  if E and eventName == E.SearchEnd and awaiting and awaiting == runToken then
+    local t = awaiting
+    awaiting = nil
+    if ns.AHRoundDone then ns.AHRoundDone(t) end
   end
+end
+local function hookAuctionator()
+  if hooked then return canChain end
+  hooked = true
+  local E = Auctionator and Auctionator.Shopping and Auctionator.Shopping.Tab and Auctionator.Shopping.Tab.Events
+  if E and E.SearchEnd and Auctionator.EventBus and Auctionator.EventBus.Register then
+    canChain = pcall(Auctionator.EventBus.Register, Auctionator.EventBus, listener, { E.SearchEnd })
+  end
+  return canChain
+end
+
+local startRound
+
+function ns.AHRoundDone(token)
+  if token ~= runToken or not running then return end
+  C_Timer.After(PAUSE, function()
+    if token == runToken and running then startRound() end
+  end)
+end
+
+local function stop(message)
+  running, runToken, awaiting = false, nil, nil
+  if message then ns.Print(message) end
+  updateText()
+end
+
+local function ahOpen()
+  return (AuctionHouseFrame and AuctionHouseFrame:IsShown()) or (AuctionFrame and AuctionFrame:IsShown())
+end
+
+-- One round: the next ROUND unpriced items.
+startRound = function()
+  if not running then return end
+  if not ahOpen() then return stop() end
+  rounds = rounds + 1
+  local ids = missing(runOutputs)
+  if #ids == 0 then return stop("AH lookup finished: nothing unpriced is left to look up.") end
+  if rounds > MAX_ROUNDS then return stop("AH lookup paused after " .. MAX_ROUNDS .. " rounds. Click again to continue.") end
+  local more = math.max(0, #ids - ROUND)
+  for i = #ids, ROUND + 1, -1 do ids[i] = nil end
+  local token = {}
+  runToken = token
+
   local A = Auctionator and Auctionator.API and Auctionator.API.v1
   if not (A and A.MultiSearchExact) then
+    ns.Print(("Looking up %d items%s."):format(#ids, more > 0 and (", " .. more .. " more after") or ""))
     markSearched(ids)
-    ns.ScanItems(ids) -- no Auctionator: Margin looks the items up itself
+    ns.ScanItems(ids, function() ns.AHRoundDone(token) end) -- Margin's own search; reports when it is done
     return
   end
-  local names, loading = {}, 0
+
+  local names, sent, loading = {}, {}, 0
   for _, id in ipairs(ids) do
     local n = C_Item.GetItemNameByID(id)
-    if n then names[#names + 1] = n else loading = loading + 1; C_Item.RequestLoadItemDataByID(id) end
+    if n then names[#names + 1] = n; sent[#sent + 1] = id else loading = loading + 1; C_Item.RequestLoadItemDataByID(id) end
   end
-  if #names == 0 then
-    ns.Print(loading > 0 and "Item names still loading, click again." or "Nothing to look up.")
+  if #names == 0 then -- names are still loading: look again shortly
+    if rounds > 6 then return stop("Item names are not loading; try again in a moment.") end
+    C_Timer.After(2, function() if token == runToken and running then startRound() end end)
     return
   end
   local ok, err = pcall(A.MultiSearchExact, "Margin", names)
-  if not ok then ns.Print("Search failed:", tostring(err)); return end
-  markSearched(ids)
-  ns.Print(("Searching %d items%s."):format(#names, loading > 0 and (", " .. loading .. " names still loading") or ""))
+  if not ok then return stop("Search failed: " .. tostring(err)) end
+  markSearched(sent)
+  ns.Print(("Searching %d items%s."):format(#names, more > 0 and (", " .. more .. " more after this round") or ""))
+  if hookAuctionator() then
+    awaiting = token
+    C_Timer.After(120, function() -- a search that never reports back must not hang the run
+      if awaiting == token then awaiting = nil; ns.AHRoundDone(token) end
+    end)
+  else
+    stop() -- cannot tell when it finished: one round per click
+  end
+end
+
+local function search(includeOutputs)
+  if running then return stop("Stopped.") end
+  running, rounds, runOutputs = true, 0, includeOutputs and true or false
+  updateText()
+  startRound()
 end
 
 local function build(parent)
@@ -143,7 +218,14 @@ end
 
 local f = CreateFrame("Frame")
 f:RegisterEvent("AUCTION_HOUSE_SHOW")
-f:SetScript("OnEvent", function() onShow(0) end)
+f:RegisterEvent("AUCTION_HOUSE_CLOSED")
+f:SetScript("OnEvent", function(_, event)
+  if event == "AUCTION_HOUSE_CLOSED" then
+    running, runToken, awaiting = false, nil, nil
+  else
+    onShow(0)
+  end
+end)
 
 -- Refresh the count and the window when Auctionator records new prices
 -- (that callback only exists in some Auctionator builds).

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- "Margin: N unpriced" now keeps going: when a round of 60 finishes it pauses a moment and starts the next, until nothing unpriced is left (30 rounds at most, then click again). Click the button while it runs to stop it. It listens for Auctionator's "search ended" announcement, so without that it falls back to one round per click.
+
 - AH: a "Scan:" button next to the other AH buttons limits "Margin: N unpriced" (the count and the search) to one profession, or all of them. Click it to cycle.
 
 - "Margin: N unpriced" now also covers the Profit tab's "Recipes: all" view: the reagents and sale prices of the unlearned recipes (and the sale prices of your own, for the AH column), so every profit figure can be filled in. Long lists are searched 60 items per click.

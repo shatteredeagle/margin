@@ -28,7 +28,7 @@ jobs:
           unknown=$(comm -23 /tmp/used <(sort tests/allowed_globals.txt))
           if [ -n "$unknown" ]; then echo "Unknown globals (add real WoW APIs to tests/allowed_globals.txt):"; echo "$unknown"; exit 1; fi
       - name: Offline tests (route planner, pricing)
-        run: lua5.1 tests/calc_test.lua
+        run: lua5.1 tests/calc_test.lua | tee /tmp/tests.out && grep -q "^calc ok$" /tmp/tests.out
 
   release:
     needs: test

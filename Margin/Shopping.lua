@@ -117,14 +117,17 @@ end
 -- Margin's own AH search for the items it cannot price: opens each item's buy view in turn
 -- (the same way the Search buttons do), and the results events record the cheapest price.
 -- Used when Auctionator is not installed.
-local scanQ, scanning, scanToken = {}, nil, nil
+local scanQ, scanning, scanToken, scanDone = {}, nil, nil, nil
 local function nextScan()
   if scanning then return end
   local item = table.remove(scanQ, 1)
   if not item then
-    ns.Print("AH search finished.")
+    ns.Print("AH search round finished.")
     if ns.InvalidatePlan then ns.InvalidatePlan() end
     if ns.RefreshUI then ns.RefreshUI() end
+    local done = scanDone
+    scanDone = nil
+    if done then done() end
     return
   end
   local token = {}
@@ -137,13 +140,13 @@ local function nextScan()
   end)
 end
 
-function ns.ScanItems(ids)
+function ns.ScanItems(ids, onDone)
   if not ahOpen() then ns.Print("Open the auction house first."); return end
   if #ids == 0 then ns.Print("Nothing to look up."); return end
+  scanDone = onDone
   scanQ = {}
   for i, id in ipairs(ids) do scanQ[i] = id end
   scanning = nil
-  ns.Print(("Searching %d items on the AH..."):format(#scanQ))
   nextScan()
 end
 
