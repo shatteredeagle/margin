@@ -67,6 +67,22 @@ local function hookAuctionator()
   return canChain
 end
 
+-- Say why there is nothing to do, instead of doing nothing.
+local function explainEmpty(includeOutputs)
+  local profs = ns.Char().profs
+  local all = ns.MissingItems(profs, includeOutputs, ns.Opt("useTrainer"), ns.Opt("profitScope") == "all",
+    scanProfession(), true)
+  local only = scanProfession()
+  if #all == 0 then
+    ns.Print(only and ("Nothing unpriced for " .. only .. ". (Scan: button cycles professions.)")
+      or "Nothing unpriced: every recipe you have is priced.")
+  else
+    ns.Print(("Nothing to look up: %d unpriced items were already searched in the last 12 hours and have no listing%s."):format(
+      #all, only and (" (" .. only .. " only)") or ""))
+    ns.Print("Right-click the button to count them again.")
+  end
+end
+
 local startRound
 
 function ns.AHRoundDone(token)
@@ -142,22 +158,6 @@ startRound = function()
     end)
   else
     stop() -- cannot tell when it finished: one round per click
-  end
-end
-
--- Say why there is nothing to do, instead of doing nothing.
-local function explainEmpty(includeOutputs)
-  local profs = ns.Char().profs
-  local all = ns.MissingItems(profs, includeOutputs, ns.Opt("useTrainer"), ns.Opt("profitScope") == "all",
-    scanProfession(), true)
-  local only = scanProfession()
-  if #all == 0 then
-    ns.Print(only and ("Nothing unpriced for " .. only .. ". (Scan: button cycles professions.)")
-      or "Nothing unpriced: every recipe you have is priced.")
-  else
-    ns.Print(("Nothing to look up: %d unpriced items were already searched in the last 12 hours and have no listing%s."):format(
-      #all, only and (" (" .. only .. " only)") or ""))
-    ns.Print("Right-click the button to count them again.")
   end
 end
 
