@@ -119,6 +119,47 @@ local function sortEntries(list)
   end)
 end
 
+-- Open a recipe in the game's own profession window with the number to craft filled in.
+-- Opens that profession first when it is not the one showing. Crafting itself stays your click.
+local function setCraftCount(count)
+  local page = ProfessionsFrame and ProfessionsFrame.CraftingPage
+  local box = page and page.CreateMultipleInputBox
+  if box and box.SetValue and count then
+    box:SetValue(count)
+    return true
+  end
+  return false
+end
+
+function ns.OpenRecipe(id, count, professionName)
+  local T = C_TradeSkillUI
+  if not (T and T.OpenRecipe) then ns.Print("This client has no profession window API."); return end
+  local function openIt()
+    local ok = pcall(T.OpenRecipe, id)
+    if not ok then ns.Print("Could not open that recipe."); return end
+    C_Timer.After(0.25, function()
+      if not setCraftCount(count) and count then
+        ns.Print(("Craft %d of it (the window has no quantity box here)."):format(count))
+      end
+    end)
+  end
+  local function showing()
+    local base = T.GetBaseProfessionInfo and T.GetBaseProfessionInfo()
+    return T.IsTradeSkillReady and T.IsTradeSkillReady() and base and base.professionName == professionName
+  end
+  if showing() then return openIt() end
+  local prof = professionName and ns.Char().profs[professionName]
+  if prof and prof.id and T.OpenTradeSkill then pcall(T.OpenTradeSkill, prof.id) end
+  local tries = 0
+  local function wait()
+    tries = tries + 1
+    if showing() then return openIt() end
+    if tries < 12 then return C_Timer.After(0.25, wait) end
+    ns.Print(("Open your %s window first, then click again."):format(professionName or "profession"))
+  end
+  C_Timer.After(0.25, wait)
+end
+
 local function build()
   frame = CreateFrame("Frame", "MarginFrame", UIParent, "BasicFrameTemplateWithInset")
   frame:SetSize(660, 420)
@@ -318,9 +359,23 @@ local function build()
       if not (e and (e.data or e.tip)) then return end
       GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
       if e.data then recipeTooltip(e.data) else e.tip(GameTooltip) end
+      if e.craft and not e.craft.learnFirst then
+        GameTooltip:AddLine(e.craft.count and ("Click: open it in the profession window, craft %d."):format(e.craft.count)
+          or "Click: open it in the profession window.", 0.6, 0.9, 1)
+      end
       GameTooltip:Show()
     end)
     row:SetScript("OnLeave", GameTooltip_Hide)
+    row:SetScript("OnClick", function(self)
+      local e = self.entry
+      local c = e and e.craft
+      if not c then return end
+      if c.learnFirst then
+        ns.Print(("Learn %s first: see \"Recipes to learn\" below."):format(c.name))
+      else
+        ns.OpenRecipe(c.id, c.count, c.profession)
+      end
+    end)
     frame.rows[i] = row
   end
 end
@@ -331,6 +386,7 @@ local function recipeEntry(d, kind, key)
   local vend, ah = ns.Revenue(r)
   local sale = key == "ah" and ah or vend
   local e = { icon = r.icon, data = d, sale = money(sale), sortName = r.name:lower(), sortSale = sale,
+    craft = { id = r.id, profession = profName, name = r.name, learnFirst = d.learn ~= nil },
     name = ("|cff%s%s|r"):format(DIFF_COLOR[r.diff] or "ffffff", r.name) }
   if d.missing > 0 then
     e.cost = ("|cffff9090%d reagent%s unpriced|r"):format(d.missing, d.missing > 1 and "s" or "")
@@ -410,6 +466,7 @@ local function routeEntries(plan)
           seg.row.learn and DIFF_COLOR[0] or (DIFF_COLOR[r.diff] or "ffffff"), r.name,
           seg.row.learn and " |cff80c0ff(learn)|r" or ""),
         cost = ("~%d crafts"):format(n), sale = money(seg.row.cost), val = netMoney(seg.cost),
+        craft = { id = r.id, count = n, profession = profName, name = r.name, learnFirst = seg.row.learn ~= nil },
       }
     end
   end

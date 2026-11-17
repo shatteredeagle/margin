@@ -107,7 +107,7 @@ function ns.Scan(verbose)
   end
 
   ns.Char().profs[base.professionName] = {
-    skill = base.skillLevel, max = base.maxSkillLevel,
+    id = base.professionID, skill = base.skillLevel, max = base.maxSkillLevel,
     time = time(), recipes = recipes, unlearned = unlearned,
     codex = C ~= nil, taught = taught, -- Polestar present / recipes taught by items found
   }
