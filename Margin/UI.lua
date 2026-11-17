@@ -3,6 +3,9 @@ local _, ns = ...
 local ROWS, ROW_H = 16, 20
 local frame, tab, profName = nil, "profit", nil
 local offset, total = 0, 0
+local shown = ROWS   -- rows visible: fewer on the Route tab, which has the comparison cards
+local cache          -- Route tab data, kept while only scrolling
+local redraw         -- the draw function (defined below)
 local sortCol, sortAsc = nil, false -- clicked column (1 name, 2 cost, 3 sale, 4 profit/per-up)
 
 local DIFF_COLOR = { [0] = "ff8040", [1] = "ffff00", [2] = "40c040", [3] = "909090" }
@@ -28,18 +31,29 @@ local function money(c)
 end
 ns.Money = money
 
+-- Same amount without colour codes, so a delta can be tinted as a whole.
+local function plainMoney(c)
+  c = math.floor(math.abs(c) + 0.5)
+  local g, sv, cp = math.floor(c / 10000), math.floor(c / 100) % 100, c % 100
+  local out = {}
+  if g > 0 then out[#out + 1] = g .. "g" end
+  if g > 0 or sv > 0 then out[#out + 1] = sv .. "s" end
+  out[#out + 1] = cp .. "c"
+  return table.concat(out, " ")
+end
+
 local function itemName(id)
   local n = C_Item.GetItemNameByID(id)
   if not n then C_Item.RequestLoadItemDataByID(id) end
   return n or ("item " .. id)
 end
 
-local function setOffset(v)
-  local max = math.max(0, total - ROWS)
+local function setOffset(v, scrolling)
+  local max = math.max(0, total - shown)
   offset = math.min(math.max(0, math.floor(v + 0.5)), max)
   frame.bar:SetMinMaxValues(0, max)
   frame.bar:SetValue(offset)
-  ns.RefreshUI()
+  if scrolling then redraw() else ns.RefreshUI() end
 end
 
 local function recipeTooltip(d)
@@ -104,7 +118,7 @@ local function build()
   frame:RegisterForDrag("LeftButton")
   frame:SetScript("OnDragStart", frame.StartMoving)
   frame:SetScript("OnDragStop", frame.StopMovingOrSizing)
-  frame:SetScript("OnMouseWheel", function(_, d) setOffset(offset - d * 3) end)
+  frame:SetScript("OnMouseWheel", function(_, d) setOffset(offset - d * 3, true) end)
   frame:SetFrameStrata("HIGH")
   frame:Hide()
   tinsert(UISpecialFrames, "MarginFrame")
@@ -172,6 +186,7 @@ local function build()
   frame.hdr = {}
   local function hdr(i, x, w, just)
     local b = CreateFrame("Button", nil, frame)
+    b.px = x
     b:SetPoint("TOPLEFT", x, -78)
     b:SetSize(w, 14)
     b:RegisterForClicks("LeftButtonUp", "RightButtonUp")
@@ -194,6 +209,39 @@ local function build()
   hdr(3, 395, 110)
   hdr(4, 510, 120)
 
+  -- Route comparison cards: the same route priced under each option.
+  frame.cards = {}
+  for i = 1, 4 do
+    local c = CreateFrame("Button", nil, frame)
+    c:SetSize(154, 46)
+    c:SetPoint("TOPLEFT", 12 + (i - 1) * 158, -80)
+    c.edge = c:CreateTexture(nil, "BACKGROUND", nil, -1)
+    c.edge:SetPoint("TOPLEFT", -2, 2)
+    c.edge:SetPoint("BOTTOMRIGHT", 2, -2)
+    c.edge:SetColorTexture(1, 0.82, 0, 1)
+    c.edge:Hide()
+    c.bg = c:CreateTexture(nil, "BACKGROUND")
+    c.bg:SetAllPoints()
+    c.bg:SetColorTexture(0.08, 0.08, 0.1, 0.9)
+    c:SetHighlightTexture("Interface\QuestFrame\UI-QuestTitleHighlight")
+    c.label = c:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    c.label:SetPoint("TOPLEFT", 6, -4)
+    c.label:SetWidth(100)
+    c.label:SetJustifyH("LEFT")
+    c.label:SetWordWrap(false)
+    c.delta = c:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    c.delta:SetPoint("TOPRIGHT", -6, -4)
+    c.delta:SetJustifyH("RIGHT")
+    c.value = c:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
+    c.value:SetPoint("BOTTOMLEFT", 6, 5)
+    c.sub = c:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    c.sub:SetPoint("BOTTOMRIGHT", -6, 6)
+    c.sub:SetJustifyH("RIGHT")
+    c:SetScript("OnClick", function(self) if self.action then self.action() end end)
+    c:Hide()
+    frame.cards[i] = c
+  end
+
   frame.bar = CreateFrame("Slider", nil, frame)
   frame.bar:SetOrientation("VERTICAL")
   frame.bar:SetPoint("TOPRIGHT", -8, -96)
@@ -209,7 +257,7 @@ local function build()
   bg:SetColorTexture(0, 0, 0, 0.35)
   frame.bar:SetScript("OnValueChanged", function(_, v)
     v = math.floor(v + 0.5)
-    if v ~= offset then offset = v; ns.RefreshUI() end
+    if v ~= offset then offset = v; redraw() end
   end)
 
   frame.rows = {}
@@ -234,7 +282,7 @@ local function build()
     row.val = col(498, 120, "RIGHT")
     row:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight")
     row:EnableMouseWheel(true)
-    row:SetScript("OnMouseWheel", function(_, d) setOffset(offset - d * 3) end)
+    row:SetScript("OnMouseWheel", function(_, d) setOffset(offset - d * 3, true) end)
     row:SetScript("OnEnter", function(self)
       local e = self.entry
       if not (e and (e.data or e.tip)) then return end
@@ -273,6 +321,26 @@ local function recipeEntry(d, kind, key)
   return e
 end
 
+-- The Route tab makes room for the comparison cards, so its rows start lower and fewer fit.
+local layoutRoute
+local function layout(isRoute)
+  if layoutRoute == isRoute then return end
+  layoutRoute = isRoute
+  local dy = isRoute and 52 or 0
+  shown = isRoute and 13 or ROWS
+  for _, h in ipairs(frame.hdr) do
+    h:ClearAllPoints()
+    h:SetPoint("TOPLEFT", h.px, -78 - dy)
+  end
+  for i, row in ipairs(frame.rows) do
+    row:ClearAllPoints()
+    row:SetPoint("TOPLEFT", 12, -94 - dy - (i - 1) * ROW_H)
+  end
+  frame.bar:ClearAllPoints()
+  frame.bar:SetPoint("TOPRIGHT", -8, -96 - dy)
+  frame.bar:SetPoint("BOTTOMRIGHT", -8, 12)
+end
+
 -- The route for the profession the window shows: plan, prof, name, target (nil when nothing is scanned).
 function ns.CurrentPlan()
   local profs = ns.Char().profs
@@ -284,8 +352,7 @@ function ns.CurrentPlan()
   return ns.Plan(prof, target, nil, ns.Opt("useTrainer")), prof, name, target
 end
 
-local function routeEntries(prof)
-  local plan, _, _, target = ns.CurrentPlan()
+local function routeEntries(plan)
   local list = {}
   for _, seg in ipairs(plan.segs) do
     if seg.gap then
@@ -326,12 +393,44 @@ local function routeEntries(prof)
       end,
     }
   end
-  return list, plan, target
+  return list
+end
+
+-- The route priced under each option, for the comparison cards, and the list for the current one.
+local function routeData()
+  local resale, trainer = ns.Opt("resale"), ns.Opt("useTrainer")
+  local function planFor(r, t)
+    return ns.With({ resale = r, useTrainer = t }, function() return (ns.CurrentPlan()) end)
+  end
+  local cards, sel = {}, nil
+  for _, m in ipairs({ "vendor", "ah", "off" }) do
+    local plan = planFor(m, trainer)
+    cards[#cards + 1] = {
+      label = m == "off" and "No resale (reagents)" or ("Resale: " .. (m == "ah" and "AH" or "vendor")),
+      plan = plan, total = plan.cost + plan.learnCost, selected = (m == resale),
+      action = function() ns.SetOpt("resale", m); ns.RefreshUI() end,
+    }
+    if m == resale then sel = cards[#cards] end
+  end
+  sel = sel or cards[1]
+  local alt = planFor(resale, not trainer)
+  cards[#cards + 1] = {
+    label = trainer and "Learned recipes only" or "With trainer recipes",
+    plan = alt, total = alt.cost + alt.learnCost, selected = false,
+    action = function() ns.SetOpt("useTrainer", not trainer); ns.RefreshUI() end,
+  }
+  return { cards = cards, sel = sel, list = routeEntries(sel.plan), target = sel.plan.target }
 end
 
 function ns.RefreshUI()
   if ns.RefreshShopping then ns.RefreshShopping() end
+  cache = nil
+  if redraw then redraw() end
+end
+
+redraw = function()
   if not frame or not frame:IsShown() then return end
+  layout(tab == "route")
   local profs = ns.Char().profs
   if not profName or not profs[profName] then profName = next(profs) end
   local prof = profName and profs[profName]
@@ -359,16 +458,34 @@ function ns.RefreshUI()
   end
   frame.search:SetShown(tab ~= "route")
   frame.searchLabel:SetShown(tab ~= "route")
+  if tab ~= "route" or not prof then for _, c in ipairs(frame.cards) do c:Hide() end end
 
   local list = {}
   if prof then
     if tab == "route" then
-      local plan, target
-      list, plan, target = routeEntries(prof)
-      local resale = ns.Opt("resale") ~= "off"
-      frame.info:SetText(("%s %d/%d  -  route to %d: ~%d crafts, %s%s + %s fees"):format(
-        profName, prof.skill, prof.max, target, math.ceil(plan.crafts),
-        money(resale and plan.cost or plan.gross), resale and " net" or "", money(plan.learnCost)))
+      cache = cache or routeData()
+      list = cache.list
+      frame.info:SetText(("%s %d/%d  -  route to %d  (what it costs after selling the crafts, plus trainer fees)"):format(
+        profName, prof.skill, prof.max, cache.target))
+      for i, c in ipairs(frame.cards) do
+        local d = cache.cards[i]
+        c.action = d.action
+        c.label:SetText(d.label)
+        c.value:SetText(money(d.total))
+        c.sub:SetText(("~%d crafts"):format(math.ceil(d.plan.crafts)))
+        c.edge:SetShown(d.selected)
+        if d.selected then
+          c.delta:SetText("|cffffd700selected|r")
+        else
+          local diff = d.total - cache.sel.total
+          if diff == 0 then
+            c.delta:SetText("same")
+          else
+            c.delta:SetText(("|cff%s%s%s|r"):format(diff > 0 and "ff6060" or "60ff60", diff > 0 and "+" or "-", plainMoney(diff)))
+          end
+        end
+        c:Show()
+      end
     else
       local rows = ns.Evaluate(prof)
       local src
@@ -388,13 +505,13 @@ function ns.RefreshUI()
   end
 
   total = #list
-  local max = math.max(0, total - ROWS)
+  local max = math.max(0, total - shown)
   if offset > max then offset = max end
   frame.bar:SetMinMaxValues(0, max)
   frame.bar:SetValue(offset)
 
   for i = 1, ROWS do
-    local row, e = frame.rows[i], list[i + offset]
+    local row, e = frame.rows[i], i <= shown and list[i + offset] or nil
     row.entry = e
     if e then
       row.icon:SetTexture(e.icon)

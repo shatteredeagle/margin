@@ -18,7 +18,10 @@ local function chardb()
 end
 
 function ns.Char() return chardb() end
+ns.override = {}
 function ns.Opt(k)
+  local o = ns.override[k]
+  if o ~= nil then return o end
   local v = MarginDB.opts and MarginDB.opts[k]
   if v == nil then return ns.defaults[k] end
   return v
@@ -26,6 +29,16 @@ end
 function ns.SetOpt(k, v)
   MarginDB.opts = MarginDB.opts or {}
   MarginDB.opts[k] = v
+end
+
+-- Runs fn with some options forced (used to price the route under other settings).
+function ns.With(over, fn)
+  local old = ns.override
+  ns.override = over
+  local ok, a, b, c = pcall(fn)
+  ns.override = old
+  if not ok then error(a, 0) end
+  return a, b, c
 end
 
 function ns.Print(...) print("|cff66ccffMargin|r", ...) end
