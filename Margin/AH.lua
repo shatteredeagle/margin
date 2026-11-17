@@ -8,8 +8,15 @@ local button
 -- badly with hundreds of terms, so a long list is worked through in rounds.
 local ROUND = 60
 
+-- The profession the lookup is limited to (nil: all of them), if it is still one of yours.
+local function scanProfession()
+  local name = ns.Opt("scanProf")
+  return name and ns.Char().profs[name] and name or nil
+end
+
 local function missing(includeOutputs)
-  return ns.MissingItems(ns.Char().profs, includeOutputs, ns.Opt("useTrainer"), ns.Opt("profitScope") == "all")
+  return ns.MissingItems(ns.Char().profs, includeOutputs, ns.Opt("useTrainer"), ns.Opt("profitScope") == "all",
+    scanProfession())
 end
 
 local function updateText()
@@ -82,6 +89,11 @@ local function build(parent)
   button:SetScript("OnLeave", GameTooltip_Hide)
 end
 
+local scanButton
+local function scanLabel()
+  return "Scan: " .. (scanProfession() or "all")
+end
+
 local listButton
 local function buildList(parent)
   listButton = CreateFrame("Button", "MarginAHListButton", parent, "UIPanelButtonTemplate")
@@ -89,6 +101,31 @@ local function buildList(parent)
   listButton:SetPoint("RIGHT", button, "LEFT", -4, 0)
   listButton:SetText("Shopping list")
   listButton:SetScript("OnClick", function() ns.ToggleShopping() end)
+
+  -- which profession "Margin: N unpriced" looks up: all of them, or one
+  scanButton = CreateFrame("Button", "MarginAHScanButton", parent, "UIPanelButtonTemplate")
+  scanButton:SetSize(140, 22)
+  scanButton:SetPoint("RIGHT", listButton, "LEFT", -4, 0)
+  scanButton:SetText(scanLabel())
+  scanButton:SetScript("OnClick", function()
+    local names = {}
+    for n in pairs(ns.Char().profs) do names[#names + 1] = n end
+    table.sort(names)
+    local cur, nxt = scanProfession(), nil
+    if not cur then nxt = names[1] else
+      for i, n in ipairs(names) do if n == cur then nxt = names[i + 1] end end
+    end
+    ns.SetOpt("scanProf", nxt) -- past the last one: back to all
+    scanButton:SetText(scanLabel())
+    updateText()
+  end)
+  scanButton:SetScript("OnEnter", function(self)
+    GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+    GameTooltip:AddLine("What to look up")
+    GameTooltip:AddLine("Limits \"Margin: N unpriced\" to one profession. Click to cycle through all of them.", 1, 1, 1, true)
+    GameTooltip:Show()
+  end)
+  scanButton:SetScript("OnLeave", GameTooltip_Hide)
 end
 
 local function onShow(tries)
@@ -99,6 +136,7 @@ local function onShow(tries)
   end
   if not button then build(parent) end
   if not listButton then buildList(parent) end
+  if scanButton then scanButton:SetText(scanLabel()) end
   updateText()
   button:Show()
 end

@@ -191,7 +191,7 @@ end
 
 -- Items Margin cannot price at all (reagents, or with includeOutputs the results
 -- of recipes that have no AH price), as a list of item IDs.
-function ns.MissingItems(profs, includeOutputs, includeRecipes, includeAll)
+function ns.MissingItems(profs, includeOutputs, includeRecipes, includeAll, only)
   local idx = craftIndex(profs)
   local out, seen = {}, {}
   local recent = time() - 12 * 3600
@@ -203,35 +203,38 @@ function ns.MissingItems(profs, includeOutputs, includeRecipes, includeAll)
       out[#out + 1] = id
     end
   end
-  for _, prof in pairs(profs) do
-    for _, r in ipairs(prof.recipes) do
-      for _, rg in ipairs(r.reagents) do
-        if not ns.UnitPrice(rg.item, idx) then add(rg.item) end
-      end
-      if includeOutputs and r.out and not ns.AHPrice(r.out) then add(r.out) end
-    end
-    -- the Profit tab's "all recipes" view: the reagents and the sale price of the unlearned ones too, so
-    -- every profit figure can be filled in (known recipes' sale prices as well, for the AH column)
-    if includeAll then
-      for _, list in ipairs({ prof.recipes, prof.unlearned or {}, prof.every or {} }) do
-        for _, r in ipairs(list) do
-          for _, rg in ipairs(r.reagents) do
-            if not ns.UnitPrice(rg.item, idx) then add(rg.item) end
-          end
-          if r.out and not ns.AHPrice(r.out) then add(r.out) end
-        end
-      end
-    end
-    -- recipe items (patterns, plans) that teach an unlearned craft and have no price yet
-    -- (only for recipes whose reagents are all priced: otherwise the route could not use them anyway)
-    for _, r in ipairs(includeRecipes and prof.unlearned or {}) do
-      if r.teach and not ns.TeachOption(r) then
-        local usable = true
+  -- `only` limits the lookup to one profession; the others still count for pricing what can be crafted
+  for name, prof in pairs(profs) do
+    if not only or name == only then
+      for _, r in ipairs(prof.recipes) do
         for _, rg in ipairs(r.reagents) do
-          if not ns.UnitPrice(rg.item, idx) then usable = false; break end
+          if not ns.UnitPrice(rg.item, idx) then add(rg.item) end
         end
-        if usable then
-          for _, o in ipairs(r.teach) do if o.rank <= (prof.max or 0) then add(o.item) end end
+        if includeOutputs and r.out and not ns.AHPrice(r.out) then add(r.out) end
+      end
+      -- the Profit tab's "all recipes" view: the reagents and the sale price of the unlearned ones too, so
+      -- every profit figure can be filled in (known recipes' sale prices as well, for the AH column)
+      if includeAll then
+        for _, list in ipairs({ prof.recipes, prof.unlearned or {}, prof.every or {} }) do
+          for _, r in ipairs(list) do
+            for _, rg in ipairs(r.reagents) do
+              if not ns.UnitPrice(rg.item, idx) then add(rg.item) end
+            end
+            if r.out and not ns.AHPrice(r.out) then add(r.out) end
+          end
+        end
+      end
+      -- recipe items (patterns, plans) that teach an unlearned craft and have no price yet
+      -- (only for recipes whose reagents are all priced: otherwise the route could not use them anyway)
+      for _, r in ipairs(includeRecipes and prof.unlearned or {}) do
+        if r.teach and not ns.TeachOption(r) then
+          local usable = true
+          for _, rg in ipairs(r.reagents) do
+            if not ns.UnitPrice(rg.item, idx) then usable = false; break end
+          end
+          if usable then
+            for _, o in ipairs(r.teach) do if o.rank <= (prof.max or 0) then add(o.item) end end
+          end
         end
       end
     end

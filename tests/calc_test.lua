@@ -278,4 +278,15 @@ local got = {}
 for _, id in ipairs(withAll) do got[id] = true end
 assert(got[777] and got[301] and #withAll == 2, "reagent and sale price of the unlearned recipe")
 MarginDB = nil
+
+-- limiting the lookup to one profession
+MarginDB = { searched = {} }
+local ra = { id = 310, out = 311, qty = 1, diff = 0, ups = 1, trivial = 50, reagents = { {item = 880, count = 1} } }
+local rbb = { id = 312, out = 313, qty = 1, diff = 0, ups = 1, trivial = 50, reagents = { {item = 881, count = 1} } }
+local pa, pb = { skill = 10, max = 60, recipes = { ra } }, { skill = 10, max = 60, recipes = { rbb } }
+local both = ns.MissingItems({ A = pa, B = pb }, false, false, false)
+assert(#both == 2)
+local onlyA = ns.MissingItems({ A = pa, B = pb }, false, false, false, "A")
+assert(#onlyA == 1 and onlyA[1] == 880)
+MarginDB = nil
 print("calc ok")
