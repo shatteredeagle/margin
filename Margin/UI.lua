@@ -282,9 +282,32 @@ local function build()
 
   frame.info = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
   frame.info:SetPoint("TOPLEFT", 14, -60)
-  frame.info:SetWidth(400)
+  frame.info:SetWidth(330)
   frame.info:SetJustifyH("LEFT")
   frame.info:SetWordWrap(false)
+
+  frame.scope = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+  frame.scope:SetSize(104, 20)
+  frame.scope:SetPoint("TOPLEFT", 346, -57)
+  frame.scope:SetScript("OnClick", function()
+    local all = ns.Opt("profitScope") ~= "all"
+    ns.SetOpt("profitScope", all and "all" or "known")
+    setOffset(0)
+    -- the full list is only read from an open profession window, and only once "all" is on
+    local p = ns.Char().profs[profName or ""]
+    if all and p and not p.every and C_TradeSkillUI and C_TradeSkillUI.IsTradeSkillReady and C_TradeSkillUI.IsTradeSkillReady() then
+      ns.Scan(false)
+    end
+  end)
+  frame.scope:SetScript("OnEnter", function(self)
+    GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+    GameTooltip:AddLine("Which recipes")
+    GameTooltip:AddLine("Known: only recipes you have learned.", 1, 1, 1, true)
+    GameTooltip:AddLine("All: every recipe of this profession, learned or not, with what it would earn. Unlearned ones are blue and say where you would learn them.", 1, 1, 1, true)
+    GameTooltip:AddLine("The full list is read from the profession window, so it needs that window open once.", 0.7, 0.7, 0.7, true)
+    GameTooltip:Show()
+  end)
+  frame.scope:SetScript("OnLeave", GameTooltip_Hide)
 
   frame.searchLabel = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
   frame.searchLabel:SetText("Search")
@@ -449,9 +472,22 @@ local function recipeEntry(d, kind, key)
   local r = d.r
   local vend, ah = ns.Revenue(r)
   local sale = key == "ah" and ah or vend
+  local unlearned = r.train or r.teach or r.extra
+  local how = ""
+  if unlearned then
+    local L = d.learn
+    if L then
+      how = (" |cff80c0ff(learn: %s)|r"):format(L.how == "trainer" and ("trainer " .. money(L.fee))
+        or (L.how == "ah" and ("pattern " .. money(L.fee) .. " on the AH") or ("pattern " .. money(L.fee))))
+    elseif r.teach then
+      how = " |cff909090(pattern not priced)|r"
+    else
+      how = " |cff909090(source unknown)|r"
+    end
+  end
   local e = { icon = r.icon, data = d, sale = money(sale), sortName = r.name:lower(), sortSale = sale,
-    craft = { id = r.id, profession = profName, name = r.name, learnFirst = d.learn ~= nil },
-    name = ("|cff%s%s|r"):format(DIFF_COLOR[r.diff] or "ffffff", r.name) }
+    craft = { id = r.id, profession = profName, name = r.name, learnFirst = (d.learn ~= nil) or (unlearned and true or false) },
+    name = ("|cff%s%s|r%s"):format(unlearned and "80c0ff" or (DIFF_COLOR[r.diff] or "ffffff"), r.name, how) }
   if d.missing > 0 then
     e.cost = ("|cffff9090%d reagent%s unpriced|r"):format(d.missing, d.missing > 1 and "s" or "")
     e.val = "?"
@@ -706,6 +742,8 @@ redraw = function()
   end
   frame.search:SetShown(tab ~= "route")
   frame.searchLabel:SetShown(tab ~= "route")
+  frame.scope:SetShown(tab == "profit" and prof ~= nil)
+  frame.scope:SetText(ns.Opt("profitScope") == "all" and "Recipes: all" or "Recipes: known")
   frame.replan:SetShown(tab == "route" and prof ~= nil)
   frame.replan:SetEnabled(ns.Opt("routeLock") and true or false)
   if tab ~= "route" or not prof then for _, c in ipairs(frame.cards) do c:Hide() end end
@@ -739,7 +777,8 @@ redraw = function()
         c:Show()
       end
     else
-      local rows = ns.Evaluate(prof)
+      local allScope = tab == "profit" and ns.Opt("profitScope") == "all"
+      local rows = ns.Evaluate(prof, nil, false, allScope)
       local src
       if tab == "profit" then src = ns.ProfitRows(rows, key, showAll) else src = ns.LevelingRows(rows, showAll) end
       local q = frame.search:GetText():lower()
@@ -752,7 +791,8 @@ redraw = function()
       frame.info:SetText(("%s %d/%d  -  %d recipes, %d priced, %d shown%s"):format(
         profName, prof.skill, prof.max, #prof.recipes, priced, #list,
         (tab == "level" and ("  |cff909090%s odds|r"):format(ns.Opt("odds") == "typical" and "typical" or "worst-case") or "")
-          .. (prof.dirty and "  |cffffd070new recipe: open the profession window to refresh|r" or "")))
+          .. (prof.dirty and "  |cffffd070new recipe: open the profession window to refresh|r" or "")
+          .. ((allScope and not prof.every) and "  |cffffd070open the profession window to load all recipes|r" or "")))
     end
   else
     frame.info:SetText("Open a profession window once to scan it.")

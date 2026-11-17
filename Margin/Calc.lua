@@ -108,14 +108,17 @@ function ns.TeachOption(r)
 end
 
 -- One row per craftable recipe with cost, both profit figures and cost per skill-up.
-function ns.Evaluate(prof, profs, includeTrainer)
+function ns.Evaluate(prof, profs, includeTrainer, includeAll)
   local rows = {}
   local idx = craftIndex(profs or (ns.Char and ns.Char().profs) or { prof })
   local list = prof.recipes
-  if includeTrainer and prof.unlearned and #prof.unlearned > 0 then
+  if (includeTrainer or includeAll) and ((prof.unlearned and #prof.unlearned > 0) or (includeAll and prof.every)) then
     list = {}
     for _, r in ipairs(prof.recipes) do list[#list + 1] = r end
-    for _, r in ipairs(prof.unlearned) do list[#list + 1] = r end
+    for _, r in ipairs(prof.unlearned or {}) do list[#list + 1] = r end
+    if includeAll then
+      for _, r in ipairs(prof.every or {}) do list[#list + 1] = r end
+    end
   end
   for _, r in ipairs(list) do
     local cost, lines, missing = ns.RecipeCost(r, idx)

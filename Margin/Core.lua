@@ -8,6 +8,7 @@ ns.defaults = {
   sortKey = "vendor", -- "vendor" or "ah"
   showAll = true,     -- list unprofitable / grey recipes too
   resale = "vendor",  -- leveling cost minus what the result sells for: "vendor" | "ah" | "off"
+  profitScope = "known", -- Profit tab: "known" recipes only, or "all" of the profession's recipes
   odds = "worst",     -- skill-up odds for yellow/green recipes: "worst" (bottom of each band) or "typical"
   routeLock = true,   -- keep the route fixed until you press Re-plan
   useRep = false,     -- false: base (worst-case) prices, rep-locked items unavailable; true: use my reputation

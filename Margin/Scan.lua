@@ -87,6 +87,10 @@ function ns.Scan(verbose)
   local C = codex()
   missingTips = 0
   local recipes, unlearned, taught = {}, {}, 0
+  -- Every other recipe the window lists, only when "all recipes" is on (it costs a schematic read each).
+  -- The cut-off keeps out recipes from much later content that nobody could make or sell yet.
+  local wantAll = ns.Opt("profitScope") == "all"
+  local every = {}
   for _, id in ipairs(T.GetAllRecipeIDs()) do
     local info = T.GetRecipeInfo(id)
     if info and not info.isGatheringRecipe and not info.isSalvageRecipe then
@@ -105,7 +109,15 @@ function ns.Scan(verbose)
           r.teach = opts
           unlearned[#unlearned + 1] = r
           taught = taught + 1
+        elseif wantAll and (info.maxTrivialLevel or 0) <= 300 then
+          local r = makeRecipe(id, info)
+          r.diff, r.extra = 0, true
+          every[#every + 1] = r
         end
+      elseif wantAll and (info.maxTrivialLevel or 0) <= 300 then
+        local r = makeRecipe(id, info)
+        r.diff, r.extra = 0, true
+        every[#every + 1] = r
       end
     end
   end
@@ -124,11 +136,13 @@ function ns.Scan(verbose)
   end
   for _, r in ipairs(recipes) do r.prof = base.professionName end
   for _, r in ipairs(unlearned) do r.prof = base.professionName end
+  for _, r in ipairs(every) do r.prof = base.professionName end
   ns.Char().profs[base.professionName] = {
     id = base.professionID, skill = base.skillLevel, max = base.maxSkillLevel, scanSkill = base.skillLevel,
     time = time(), recipes = recipes, unlearned = unlearned,
     codex = C ~= nil, taught = taught, -- Polestar present / recipes taught by items found
     graduated = next(graduated) and graduated or nil,
+    every = wantAll and every or nil, -- nil when "all recipes" was off at this scan
   }
   if verbose then
     ns.Print(base.professionName, #recipes, "recipes scanned,", #unlearned - taught, "trainer recipes,",

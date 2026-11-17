@@ -201,4 +201,15 @@ assert(lvl[1].r == Hi, "the reliable recipe ranks first")
 local planq = ns.Plan(pq, 12, { pq }, false)
 assert(planq.segs[1].row.r == Hi, "route uses the reliable recipe")
 oddsMode = "typical"; resaleMode = "off"
+
+-- all-recipes scope: unlearned and extra recipes join the evaluation only when asked
+prices[20] = {10, "vendor"}
+local known = { id = 200, out = 9, qty = 1, diff = 0, ups = 1, trivial = 50, reagents = { {item = 20, count = 1} } }
+local extra = { id = 201, out = 9, qty = 1, diff = 0, ups = 1, trivial = 50, extra = true, reagents = { {item = 20, count = 1} } }
+local trn = { id = 202, out = 9, qty = 1, diff = 0, ups = 1, trivial = 50, train = { rank = 20, fee = 100 }, reagents = { {item = 20, count = 1} } }
+local pall = { skill = 10, max = 60, recipes = { known }, unlearned = { trn }, every = { extra } }
+assert(#ns.Evaluate(pall, { pall }, false, false) == 1)
+assert(#ns.Evaluate(pall, { pall }, true, false) == 2)
+local allRows = ns.Evaluate(pall, { pall }, false, true)
+assert(#allRows == 3 and allRows[2].learn and allRows[2].learn.how == "trainer" and allRows[3].learn == nil)
 print("calc ok")
