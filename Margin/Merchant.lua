@@ -123,6 +123,15 @@ computeSell = function(plan)
 end
 
 local sellBusy = false
+
+local function bagUnits(items)
+  local n = 0
+  for item in pairs(items) do
+    n = n + ((C_Item.GetItemCount and C_Item.GetItemCount(item, false)) or 0)
+  end
+  return n
+end
+
 local function doSell(rows)
   if sellBusy then return end
   local slots, wanted = {}, {}
@@ -137,45 +146,66 @@ local function doSell(rows)
       end
     end
   end
-  if #slots == 0 then return end
+  if #slots == 0 then
+    ns.Print("Found nothing to sell in your bags (are the stacks locked or in the bank?).")
+    return
+  end
+  local before = bagUnits(wanted)
+  ns.Print(("Selling %d stacks (%d items)..."):format(#slots, before))
   sellBusy = true
-  local i, units, copper = 0, 0, 0
+  forbidden = false
+  local i = 0
+  local function finishUp()
+    C_Timer.After(0.6, function()
+      sellBusy = false
+      local sold = before - bagUnits(wanted)
+      if sold > 0 then
+        ns.Print(("Sold %d crafted items."):format(sold))
+      elseif forbidden then
+        ns.Print("The game blocked selling from an addon here, so nothing was sold. Right-click the items to sell them yourself.")
+      else
+        ns.Print("Nothing was sold. Is the vendor window still open? /margin debug shows more.")
+      end
+      ns.RefreshMerchant()
+    end)
+  end
   local function step()
     i = i + 1
     local t = slots[i]
-    if not t or not (MerchantFrame and MerchantFrame:IsShown()) then
-      sellBusy = false
-      ns.Print(("Sold %d crafted items for about %s."):format(units, ns.Money(copper)))
-      return ns.RefreshMerchant()
-    end
+    if not t or forbidden or not (MerchantFrame and MerchantFrame:IsShown()) then return finishUp() end
     -- re-read the slot: only sell it if it still holds the item we meant
     local info = C_Container.GetContainerItemInfo(t.bag, t.slot)
     if info and info.itemID == t.item and not info.isLocked then
-      local each = ns.VendorSell(t.item) or 0
-      units = units + (info.stackCount or 1)
-      copper = copper + each * (info.stackCount or 1)
-      C_Container.UseContainerItem(t.bag, t.slot) -- with a vendor open this sells the stack
+      local ok, err = pcall(C_Container.UseContainerItem, t.bag, t.slot) -- with a vendor open this sells the stack
+      if not ok then ns.Print("Selling failed:", tostring(err)); return finishUp() end
+      if MarginDB.debug then ns.Print("[sell]", t.bag, t.slot, t.item, "stack", info.stackCount) end
     end
     C_Timer.After(0.12, step)
   end
   step()
 end
 
-StaticPopupDialogs["MARGIN_SELL_CONFIRM"] = {
-  text = "%s", button1 = YES, button2 = NO, timeout = 0, whileDead = false, hideOnEscape = true,
-  OnAccept = function(_, data) if data then data() end end,
-}
-
-local function confirmSell(rows)
-  local n, v = 0, 0
-  for _, r in ipairs(rows) do n = n + r.count; v = v + r.value end
-  if n == 0 then return end
-  StaticPopup_Show("MARGIN_SELL_CONFIRM", ("Margin: sell %d crafted items to this vendor for %s?"):format(n, ns.Money(v)),
-    nil, function() doSell(rows) end)
+-- Two-step confirm without the game's popup: the first click arms the button, a second within a
+-- few seconds sells. `armed` is the row (or "all") waiting for it.
+local armed
+local function arm(key, rows, label)
+  if armed and armed.key == key then
+    armed = nil
+    doSell(rows)
+    return ns.RefreshMerchant()
+  end
+  armed = { key = key, label = label }
+  C_Timer.After(6, function()
+    if armed and armed.key == key then armed = nil; ns.RefreshMerchant() end
+  end)
+  ns.RefreshMerchant()
 end
 
-local function lotsFor(r) return math.ceil(r.buy / r.stack) end
-local function buyable(r) return r.buy > 0 and not r.cheaper and not (r.avail == 0) end
+local function sellTotals(rows)
+  local n, v = 0, 0
+  for _, r in ipairs(rows) do n = n + r.count; v = v + r.value end
+  return n, v
+end
 
 ---------------------------------------------------------------------------
 -- Buying
@@ -306,7 +336,7 @@ local function build()
     b:SetSize(80, 20)
     b:SetPoint("TOPLEFT", x, -28)
     b:SetText(text)
-    b:SetScript("OnClick", function() mode = m; offset = 0; ns.RefreshMerchant() end)
+    b:SetScript("OnClick", function() mode = m; offset = 0; armed = nil; ns.RefreshMerchant() end)
     return b
   end
   frame.tBuy = tabButton(12, "Buy", "buy")
@@ -359,7 +389,7 @@ local function build()
     row.buy:SetScript("OnClick", function()
       local d = row.data
       if not d then return end
-      if d.sell then confirmSell({ d }) else buyOne(d) end
+      if d.sell then arm(d, { d }) else buyOne(d) end
     end)
     row.name = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     row.name:SetPoint("TOPLEFT", row.btn, "TOPRIGHT", 8, 0)
@@ -381,7 +411,7 @@ local function build()
     if mode == "sell" then
       local rows = {}
       for _, r in ipairs(sellList) do if not r.ahBetter then rows[#rows + 1] = r end end
-      confirmSell(rows)
+      if #rows > 0 then arm("all", rows) end
     else
       buyAll()
     end
@@ -429,7 +459,7 @@ function ns.RefreshMerchant()
           r.ahBetter and ("  |cffffd070AH ~%s each|r"):format(ns.Money(r.ahNet)) or ""))
         row.name:SetTextColor(1, 1, 1)
         row.buy:SetShown(true)
-        row.buy:SetText(("Sell %d"):format(r.count))
+        row.buy:SetText(armed and armed.key == r and ("Sure? %d"):format(r.count) or ("Sell %d"):format(r.count))
         row.buy:SetEnabled(not sellBusy)
       elseif r.cheaper then
         row.sub:SetText("|cffffd070the AH is cheaper|r")
@@ -454,8 +484,12 @@ function ns.RefreshMerchant()
   frame.all:SetShown(any)
   if mode == "sell" then
     frame.all:SetEnabled(any and not sellBusy)
-    frame.all:SetText(sellBusy and "Selling..." or "Sell all crafted items")
-    frame.note:SetText(any and "Asks first. Skips items the AH pays more for (unless you tick the box) and anything a later step uses." or "")
+    local allRows = {}
+    for _, r in ipairs(sellList) do if not r.ahBetter then allRows[#allRows + 1] = r end end
+    local n, v = sellTotals(allRows)
+    frame.all:SetText(sellBusy and "Selling..." or (armed and armed.key == "all"
+      and ("Click again: sell %d items for %s"):format(n, ns.Money(v)) or "Sell all crafted items"))
+    frame.note:SetText(any and "Click twice to confirm. Skips items the AH pays more for (unless you tick the box) and anything a later step uses." or "")
   else
     frame.all:SetEnabled(any and not busy)
     frame.all:SetText(busy and "Buying..." or (MarginDB.buyPerClick and "Buy next stack (click per stack)" or "Buy everything for the route"))

@@ -41,6 +41,6 @@ Bundled data and where it comes from is in [THIRD_PARTY.md](THIRD_PARTY.md); the
 
 ## Development
 
-`lua5.1 tests/calc_test.lua` runs the offline tests; CI also syntax-checks every file. Pushing a tag like `v0.2.0` builds the zip and publishes a release (a tag with a `-` in it, like `v0.2.0-beta`, is marked a pre-release). Release notes come from `CHANGELOG.md`.
+`lua5.1 tests/calc_test.lua` runs the offline tests; CI also syntax-checks every file. Pushing a tag like `v0.2.0` builds the zip and publishes a release (tags containing `-beta` or `-rc` are marked pre-releases; everything else is a normal release, which is what addon managers follow). Release notes come from `CHANGELOG.md`.
 
 MIT licensed.

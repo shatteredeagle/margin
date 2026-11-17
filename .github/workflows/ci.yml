@@ -55,6 +55,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           PRE=""
-          case "$VERSION" in *-*) PRE="--prerelease" ;; esac
+          case "$VERSION" in *-beta*|*-rc*) PRE="--prerelease" ;; esac
           gh release create "$GITHUB_REF_NAME" "Margin-${VERSION}.zip" release.json \
-            --title "Margin ${VERSION}" --notes-file notes.md $PRE
+            --title "Margin ${VERSION}" --notes-file notes.md --latest $PRE

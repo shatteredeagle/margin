@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.1-alpha
+
+- Route: crafts that make an intermediate (for example Medium Leather for Heavy Leather) now appear as "make" steps right before the step that uses them, deepest first.
+- Vendor Sell tab: the confirmation is now a second click on the button instead of the game's popup, and it reports what it sold (or why nothing sold).
+- Releases are now normal releases, so addon managers see them.
+
 ## 0.1.0-alpha
 
 First public build. Built for WoW Forever (Interface 16001); not yet tested by anyone but its author.
