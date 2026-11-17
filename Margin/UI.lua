@@ -460,6 +460,22 @@ local function routeEntries(plan)
     else
       local r = seg.row.r
       local n = math.ceil(seg.crafts)
+      -- intermediates this step uses that are cheaper to make than to buy, made first
+      for _, p in ipairs(seg.prep or {}) do
+        list[#list + 1] = {
+          icon = p.recipe.icon,
+          name = ("      |cff9fb4ffmake|r %s"):format(p.recipe.name),
+          cost = ("~%d crafts"):format(p.crafts),
+          sale = p.unit and (money(p.unit) .. " each") or "",
+          val = p.unit and money(p.unit * p.units) or "?",
+          craft = { id = p.recipe.id, count = p.crafts, profession = p.recipe.prof or profName, name = p.recipe.name },
+          tip = function(tt)
+            tt:AddLine(p.recipe.name)
+            tt:AddLine(("%d needed for %s; making them costs less than buying them."):format(p.units, r.name), 1, 1, 1, true)
+            tt:AddLine("Do this before the step below.", 0.7, 0.7, 0.7, true)
+          end,
+        }
+      end
       list[#list + 1] = {
         icon = r.icon, data = seg.row,
         name = ("%d-%d  |cff%s%s|r%s"):format(seg.from, seg.to,

@@ -8,8 +8,9 @@ ns.CHANCE = CHANCE
 -- reagent you can craft yourself is priced at its craft cost when that is cheaper.
 local function craftIndex(profs)
   local idx = {}
-  for _, prof in pairs(profs) do
+  for name, prof in pairs(profs) do
     for _, r in ipairs(prof.recipes) do
+      r.prof = r.prof or name
       if r.out and not idx[r.out] then idx[r.out] = r end
     end
   end
@@ -209,13 +210,24 @@ function ns.RouteChance(r, s0, s)
   return 0.25
 end
 
--- Expand r x mult into base (non-crafted) materials, following craft-priced reagents.
-local function expand(r, mult, idx, acc)
+-- Expand r x mult into base (non-crafted) materials, following craft-priced reagents. `prep`
+-- collects the intermediate crafts on the way, deepest first (what has to be made before what).
+local function expand(r, mult, idx, acc, prep)
   for _, rg in ipairs(r.reagents) do
     local _, src = unitPrice(rg.item, idx, { [r.out or 0] = true })
     local sub = idx[rg.item]
     if src == "craft" and sub then
-      expand(sub, mult * rg.count / sub.qty, idx, acc)
+      local units = mult * rg.count
+      expand(sub, units / sub.qty, idx, acc, prep) -- its own ingredients come first
+      if prep then
+        local e = prep.byItem[rg.item]
+        if not e then
+          e = { item = rg.item, recipe = sub, units = 0 }
+          prep.byItem[rg.item] = e
+          prep.order[#prep.order + 1] = e
+        end
+        e.units = e.units + units
+      end
     else
       acc[rg.item] = (acc[rg.item] or 0) + mult * rg.count
     end
@@ -318,7 +330,18 @@ function ns.Plan(prof, target, profs, useTrainer)
 
   local acc = {}
   for _, seg in ipairs(segs) do
-    if not seg.gap then expand(seg.row.r, math.ceil(seg.crafts), idx, acc) end
+    if not seg.gap then
+      local prep = { order = {}, byItem = {} }
+      expand(seg.row.r, math.ceil(seg.crafts), idx, acc, prep)
+      seg.prep = {} -- intermediates to make before this step, in order
+      for _, e in ipairs(prep.order) do
+        seg.prep[#seg.prep + 1] = {
+          item = e.item, recipe = e.recipe,
+          units = math.ceil(e.units - 1e-9), crafts = math.ceil(e.units / e.recipe.qty - 1e-9),
+          unit = ns.UnitPrice(e.item, idx), -- what one costs to make
+        }
+      end
+    end
   end
   local shop, shopCost = {}, 0
   for item, n in pairs(acc) do

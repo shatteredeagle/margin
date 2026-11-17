@@ -6,6 +6,7 @@ local function makeRecipe(id, info)
   local s = T.GetRecipeSchematic(id, false)
   local r = {
     id = id,
+    prof = nil, -- set by Scan, below
     name = info.name,
     icon = info.icon,
     diff = info.relativeDifficulty, -- 0 optimal, 1 medium, 2 easy, 3 trivial
@@ -106,6 +107,8 @@ function ns.Scan(verbose)
     end
   end
 
+  for _, r in ipairs(recipes) do r.prof = base.professionName end
+  for _, r in ipairs(unlearned) do r.prof = base.professionName end
   ns.Char().profs[base.professionName] = {
     id = base.professionID, skill = base.skillLevel, max = base.maxSkillLevel,
     time = time(), recipes = recipes, unlearned = unlearned,

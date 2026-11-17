@@ -131,4 +131,14 @@ depositEach = 100
 local _, ah2 = ns.Revenue({ out = 9, qty = 1 })
 assert(ah2 == 930, ah2)
 depositEach = 0
+
+-- intermediates become inline prep steps: user recipe needs 3 of item 15, made 2 at a time from 4 of item 1
+local inter2 = { id = 40, out = 15, qty = 2, diff = 3, ups = 1, trivial = 5, reagents = { {item = 1, count = 4} } }
+local user2 = { id = 41, out = 9, qty = 1, diff = 0, ups = 1, trivial = 40, reagents = { {item = 15, count = 3} } }
+local prof3 = { skill = 10, max = 40, recipes = { inter2, user2 } }
+local plan3 = ns.Plan(prof3, 12, { prof3 }, false)
+local seg3 = plan3.segs[1]
+assert(seg3.row.r == user2 and #seg3.prep == 1, "one prep step")
+assert(seg3.prep[1].item == 15 and seg3.prep[1].units == 6 and seg3.prep[1].crafts == 3, seg3.prep[1].crafts)
+assert(seg3.prep[1].recipe == inter2)
 print("calc ok")
