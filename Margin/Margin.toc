@@ -9,6 +9,7 @@
 ## IconTexture: Interface\Icons\INV_Misc_Coin_01
 
 Core.lua
+VendorData.lua
 Prices.lua
 Scan.lua
 Calc.lua

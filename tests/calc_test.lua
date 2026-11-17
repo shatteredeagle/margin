@@ -1,6 +1,7 @@
 -- Offline check of Calc.lua with stubbed prices. Run: lua tests/calc_test.lua
 local ns = { Opt = function() return 0.05 end }
 local prices = { [1] = {10, "vendor"}, [2] = {50, "ah"} }
+ns.VENDOR_SEED = {}
 ns.BuyPrice = function(id) local p = prices[id]; if p then return p[1], p[2] end end
 ns.AHPrice = function(id) return id == 9 and 1000 or nil end
 ns.VendorSell = function(id) return id == 9 and 300 or nil end

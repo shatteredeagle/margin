@@ -2,13 +2,18 @@ local _, ns = ...
 
 local API = "Margin"
 
--- Cheapest unit price to acquire an item: vendor buy price when a merchant
--- has been seen selling it (Auctionator caches those), otherwise the AH price.
+-- Vendor buy price: what Auctionator saw at a merchant, else the bundled table.
+local function vendorBuy(A, itemID)
+  return A.GetVendorPriceByItemID(API, itemID) or ns.VENDOR_SEED[itemID]
+end
+
+-- Cheapest unit price to acquire an item: vendor buy price (Auctionator's
+-- merchant cache, falling back to the bundled seed), otherwise the AH price.
 -- Returns copper, source ("vendor" | "ah") or nil when nothing is known.
 function ns.BuyPrice(itemID)
   local A = Auctionator and Auctionator.API and Auctionator.API.v1
   if not A then return nil end
-  local vendor = A.GetVendorPriceByItemID(API, itemID)
+  local vendor = vendorBuy(A, itemID)
   local ah = A.GetAuctionPriceByItemID(API, itemID)
   if vendor and (not ah or vendor <= ah) then return vendor, "vendor" end
   if ah then return ah, "ah" end
