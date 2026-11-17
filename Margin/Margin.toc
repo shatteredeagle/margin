@@ -4,15 +4,16 @@
 ## Author: jesse
 ## X-License: MIT
 ## Version: 0.1.0
-## Dependencies: Auctionator
-## OptionalDeps: Polestar
+## OptionalDeps: Auctionator, Polestar
 ## SavedVariables: MarginDB
 ## IconTexture: Interface\Icons\INV_Misc_Coin_01
 
 Core.lua
 VendorData.lua
 TrainerData.lua
+TaughtData.lua
 Prices.lua
+Taught.lua
 Scan.lua
 Calc.lua
 UI.lua

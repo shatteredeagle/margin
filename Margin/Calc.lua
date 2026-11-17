@@ -78,10 +78,14 @@ function ns.TeachOption(r)
   local best
   for _, o in ipairs(r.teach) do
     local ah, vend = ns.AHPrice(o.item), ns.VendorBuy(o.item)
+    -- Worst case by default: a reputation-locked pattern is out of reach. With "use my
+    -- reputation" it counts once your standing with that faction is high enough.
+    local vendorOK = not o.rep
+      or (ns.Opt("useRep") and o.repFaction and o.repStanding and (ns.RepStanding(o.repFaction) or 0) >= o.repStanding)
     local fee, how
     if ah and (not vend or ah < vend) then
       fee, how = ah, "ah"
-    elseif vend and not o.rep then
+    elseif vend and vendorOK then
       fee, how = vend, "vendor"
     end
     if fee and (not best or fee < best.fee) then

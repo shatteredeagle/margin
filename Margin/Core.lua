@@ -6,6 +6,7 @@ ns.defaults = {
   sortKey = "vendor", -- "vendor" or "ah"
   showAll = true,     -- list unprofitable / grey recipes too
   resale = "vendor",  -- leveling cost minus what the result sells for: "vendor" | "ah" | "off"
+  useRep = false,     -- false: base (worst-case) prices, rep-locked items unavailable; true: use my reputation
   merchantList = true, -- open the vendor buy list beside a vendor that sells route items
   ahList = true,      -- open the shopping list beside the auction house
   useTrainer = true,  -- route may include recipes you still have to learn from a trainer
@@ -62,6 +63,11 @@ SlashCmdList.MARGIN = function(msg)
     local n = tonumber(msg:match("route%s+(%d+)"))
     ns.SetOpt("routeTarget", n)
     ns.Print(n and ("route target " .. n) or "route target: profession max")
+    if ns.RefreshUI then ns.RefreshUI() end
+  elseif msg == "rep" then
+    ns.SetOpt("useRep", not ns.Opt("useRep"))
+    ns.Print(ns.Opt("useRep") and "using my reputation (discounts seen at vendors, unlocked patterns)"
+      or "using base prices (worst case, ignores reputation)")
     if ns.RefreshUI then ns.RefreshUI() end
   elseif msg == "buy" then
     ns.ToggleMerchant()

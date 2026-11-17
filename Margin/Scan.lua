@@ -27,8 +27,8 @@ local function makeRecipe(id, info)
   return r
 end
 
--- Polestar's Codex knows which recipe item teaches each craft, with its required
--- skill, reputation and sources. Used when Polestar is installed; nothing is bundled.
+-- Polestar's Codex is an optional extra source of recipe items; the bundled table
+-- (TaughtData.lua) is the main one, so Margin works without it.
 local function codex()
   local C = Polestar and Polestar.Codex
   if not C then return nil end
@@ -37,17 +37,33 @@ local function codex()
   return C
 end
 
+-- The recipe items that teach craft `id` in this profession: { item, rank, rep }. The rank comes
+-- from the item's tooltip (Forever's own number) when loaded, else the bundled Era rank.
+local missingTips = 0
 local function teachOptions(C, id, base)
-  local out = {}
-  local ok, items = pcall(C.RecipeItems, id)
-  if not ok or type(items) ~= "table" then return out end
-  for _, itemID in ipairs(items) do
-    local ok2, rec = pcall(C.Item, itemID)
-    if ok2 and type(rec) == "table" and rec.reqSkill == base.professionID and rec.reqSkillRank
-      and rec.status ~= "retired" then
-      local vendor = false
-      for _, src in ipairs(rec.sources or {}) do if src.type == "vendor" then vendor = true end end
-      out[#out + 1] = { item = itemID, rank = rec.reqSkillRank, rep = rec.repFaction ~= nil, vendor = vendor }
+  local out, seen = {}, {}
+  local function add(itemID, fallbackRank, repHint)
+    if seen[itemID] then return end
+    seen[itemID] = true
+    local info = ns.RecipeItemInfo(itemID, base.professionName)
+    if not info then missingTips = missingTips + 1 end
+    out[#out + 1] = {
+      item = itemID,
+      rank = info and (info.rank or 0) or fallbackRank or 0,
+      rep = info and info.rep or repHint or false,
+      repFaction = info and info.repFaction, repStanding = info and info.repStanding,
+    }
+  end
+  for _, t in ipairs(ns.TAUGHT and ns.TAUGHT[id] or {}) do
+    if t[2] == base.professionID then add(t[1], t[3]) end
+  end
+  if C then
+    local ok, items = pcall(C.RecipeItems, id)
+    for _, itemID in ipairs(ok and type(items) == "table" and items or {}) do
+      local ok2, rec = pcall(C.Item, itemID)
+      if ok2 and type(rec) == "table" and rec.reqSkill == base.professionID and rec.status ~= "retired" then
+        add(itemID, rec.reqSkillRank, rec.repFaction ~= nil)
+      end
     end
   end
   return out
@@ -65,6 +81,7 @@ function ns.Scan(verbose)
 
   local trainer = ns.TRAINER and ns.TRAINER[base.professionName] or {}
   local C = codex()
+  missingTips = 0
   local recipes, unlearned, taught = {}, {}, 0
   for _, id in ipairs(T.GetAllRecipeIDs()) do
     local info = T.GetRecipeInfo(id)
@@ -76,7 +93,7 @@ function ns.Scan(verbose)
         r.diff = 0 -- unlearned recipes report no difficulty; the route assumes orange at the trainer rank
         r.train = { rank = trainer[id][1], fee = trainer[id][2] }
         unlearned[#unlearned + 1] = r
-      elseif C and (info.maxTrivialLevel or 0) > (base.skillLevel or 0) then
+      elseif (info.maxTrivialLevel or 0) > (base.skillLevel or 0) then
         local opts = teachOptions(C, id, base)
         if #opts > 0 then
           local r = makeRecipe(id, info)
@@ -96,8 +113,9 @@ function ns.Scan(verbose)
   }
   if verbose then
     ns.Print(base.professionName, #recipes, "recipes scanned,", #unlearned - taught, "trainer recipes,",
-      taught, "taught by items" .. (C and "" or " (install Polestar to find these)"))
+      taught, "taught by items")
   end
+  ns.needRescan = missingTips > 0 -- recipe item tooltips were not loaded yet; try again when they arrive
   if ns.RefreshUI then ns.RefreshUI() end
 end
 
@@ -109,4 +127,14 @@ f:SetScript("OnEvent", function()
   if pending then return end
   pending = true
   C_Timer.After(0.5, function() pending = nil; ns.Scan(false) end)
+end)
+
+-- Item data arrives asynchronously: re-read the profession once the recipe items have loaded.
+local loader = CreateFrame("Frame")
+loader:RegisterEvent("GET_ITEM_INFO_RECEIVED")
+local queued
+loader:SetScript("OnEvent", function()
+  if not ns.needRescan or queued then return end
+  queued = true
+  C_Timer.After(1.5, function() queued = nil; ns.needRescan = false; ns.Scan(false) end)
 end)

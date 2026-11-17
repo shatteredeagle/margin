@@ -135,6 +135,25 @@ local function build()
   tinsert(UISpecialFrames, "MarginFrame")
   frame.TitleText:SetText("Margin")
 
+  frame.rep = CreateFrame("CheckButton", nil, frame, "UICheckButtonTemplate")
+  frame.rep:SetSize(22, 22)
+  frame.rep:SetPoint("TOPLEFT", 6, -2)
+  frame.rep.text:SetText("My reputation")
+  frame.rep.text:SetFontObject("GameFontNormalSmall")
+  frame.rep:SetScript("OnClick", function(self)
+    ns.SetOpt("useRep", self:GetChecked() and true or false)
+    ns.RefreshUI()
+  end)
+  frame.rep:SetScript("OnEnter", function(self)
+    GameTooltip:SetOwner(self, "ANCHOR_BOTTOMRIGHT")
+    GameTooltip:AddLine("Use my reputation")
+    GameTooltip:AddLine("Off (default): base vendor prices and no reputation-locked patterns. This is the worst case.", 1, 1, 1, true)
+    GameTooltip:AddLine("On: the lowest price you were charged at vendors you opened, and patterns whose reputation you have reached.", 1, 1, 1, true)
+    GameTooltip:AddLine("Trainer fees always use base prices.", 0.7, 0.7, 0.7, true)
+    GameTooltip:Show()
+  end)
+  frame.rep:SetScript("OnLeave", GameTooltip_Hide)
+
   local function button(x, w, text, onclick)
     local b = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
     b:SetSize(w, 22)
@@ -464,6 +483,7 @@ end
 redraw = function()
   if not frame or not frame:IsShown() then return end
   layout(tab == "route")
+  frame.rep:SetChecked(ns.Opt("useRep") and true or false)
   -- The current tab's button is greyed out and highlighted, so you can see where you are.
   for name, b in pairs({ profit = frame.tProfit, level = frame.tLevel, route = frame.tRoute }) do
     local selected = tab == name

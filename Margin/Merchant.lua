@@ -301,7 +301,19 @@ function ns.RefreshMerchant()
   frame.note:SetText(any and "Buys only what you still need; stops if bags are full or gold runs out." or "")
 end
 
+-- Remember what this vendor charges per unit for plain-gold, unlimited items (feeds Prices.lua).
+local function record()
+  for i = 1, GetMerchantNumItems() do
+    local price, stack, avail, purchasable, ext = merchantInfo(i)
+    local id = GetMerchantItemID(i)
+    if id and price and price > 0 and not ext and purchasable ~= false and (avail or -1) < 0 then
+      ns.NoteVendorPrice(id, price / math.max(1, stack or 1))
+    end
+  end
+end
+
 local function showHere()
+  record()
   if not ns.Opt("merchantList") then return end
   if not frame then build() end
   compute()
@@ -336,6 +348,9 @@ ev:SetScript("OnEvent", function(_, event, a)
     if a == "Margin" then forbidden = true end
   elseif event == "MERCHANT_SHOW" then
     C_Timer.After(0.3, showHere)
+  elseif event == "MERCHANT_UPDATE" then
+    record()
+    ns.RefreshMerchant()
   elseif event == "MERCHANT_CLOSED" then
     issued, busy = {}, false
     if frame then frame:Hide() end
