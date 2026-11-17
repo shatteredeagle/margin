@@ -588,6 +588,18 @@ redraw = function()
   end
 end
 
+-- Show the window on a given profession (the profession window's button uses this).
+function ns.OpenForProfession(name)
+  if not frame then build() end
+  if name and ns.Char().profs[name] then profName = name end
+  if frame:IsShown() then
+    ns.RefreshUI()
+  else
+    frame:Show()
+    ns.RefreshUI()
+  end
+end
+
 function ns.ToggleUI()
   if not frame then build() end
   if frame:IsShown() then frame:Hide() else frame:Show(); ns.RefreshUI() end

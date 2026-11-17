@@ -20,4 +20,5 @@ UI.lua
 Shopping.lua
 Merchant.lua
 AH.lua
+ProfessionButton.lua
 Probe.lua
