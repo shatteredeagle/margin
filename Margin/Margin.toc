@@ -16,5 +16,6 @@ Scan.lua
 Calc.lua
 UI.lua
 Shopping.lua
+Merchant.lua
 AH.lua
 Probe.lua
