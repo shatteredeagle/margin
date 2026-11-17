@@ -1,0 +1,11 @@
+## Interface: 16001
+## Title: Margin
+## Notes: Profitable crafts and cheapest leveling recipes from your tradeskills, priced from Auctionator. Built for WoW Forever.
+## Author: jesse
+## X-License: MIT
+## Version: 0.0.1
+## OptionalDeps: Auctionator
+## SavedVariables: MarginDB
+## IconTexture: Interface\Icons\INV_Misc_Coin_01
+
+probe.lua
