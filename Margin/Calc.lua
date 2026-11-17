@@ -43,21 +43,32 @@ function ns.Evaluate(prof)
   return rows
 end
 
+-- Fully priced profitable recipes first (best profit first), then every
+-- recipe that lacks a price, so an empty price database is visible, not blank.
 function ns.ProfitRows(rows, key)
-  local out = {}
+  local out, unpriced = {}, {}
   local field = key == "ah" and "ahProfit" or "vendorProfit"
   for _, row in ipairs(rows) do
-    if row.missing == 0 and row[field] and row[field] > 0 then out[#out + 1] = row end
+    if row.missing > 0 or row[field] == nil then
+      unpriced[#unpriced + 1] = row
+    elseif row[field] > 0 then
+      out[#out + 1] = row
+    end
   end
   table.sort(out, function(a, b) return a[field] > b[field] end)
+  for _, row in ipairs(unpriced) do out[#out + 1] = row end
   return out, field
 end
 
+-- Cheapest skill-ups first; unpriced recipes that can still skill up follow.
 function ns.LevelingRows(rows)
-  local out = {}
+  local out, unpriced = {}, {}
   for _, row in ipairs(rows) do
-    if row.missing == 0 and row.perUp then out[#out + 1] = row end
+    if row.chance > 0 then
+      if row.missing == 0 then out[#out + 1] = row else unpriced[#unpriced + 1] = row end
+    end
   end
   table.sort(out, function(a, b) return a.perUp < b.perUp end)
+  for _, row in ipairs(unpriced) do out[#out + 1] = row end
   return out
 end

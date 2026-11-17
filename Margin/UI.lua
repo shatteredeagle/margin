@@ -114,8 +114,10 @@ function ns.RefreshUI()
   if prof then
     local rows = ns.Evaluate(prof)
     if tab == "profit" then list = ns.ProfitRows(rows, key) else list = ns.LevelingRows(rows) end
-    frame.info:SetText(("%s %d/%d  -  %s"):format(profName, prof.skill, prof.max,
-      tab == "profit" and "profit per craft" or "cost per skill-up"))
+    local priced = 0
+    for _, d in ipairs(rows) do if d.missing == 0 then priced = priced + 1 end end
+    frame.info:SetText(("%s %d/%d  -  %d recipes, %d priced  -  %s"):format(profName, prof.skill, prof.max,
+      #prof.recipes, priced, tab == "profit" and "profit per craft" or "cost per skill-up"))
   else
     frame.info:SetText("Open a profession window once to scan it.")
   end
@@ -128,8 +130,10 @@ function ns.RefreshUI()
     if d then
       row.icon:SetTexture(d.r.icon)
       row.name:SetText(d.r.name)
-      row.cost:SetText("cost " .. money(d.cost))
-      if tab == "profit" then
+      row.cost:SetText(d.missing > 0 and (d.missing .. " unpriced") or ("cost " .. money(d.cost)))
+      if d.missing > 0 then
+        row.val:SetText("?")
+      elseif tab == "profit" then
         row.val:SetText(money(key == "ah" and d.ahProfit or d.vendorProfit))
       else
         row.val:SetText(money(math.floor(d.perUp)) .. " /up")
