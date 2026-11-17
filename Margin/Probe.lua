@@ -1,7 +1,7 @@
 local _, ns = ...
 
 -- /margin probe: saves what Forever reports about UNLEARNED recipes of the open
--- profession (source text, requirements, difficulty) into MarginDB.probeUnlearned.
+-- profession (source text, requirements, difficulty) into MarginDB.probeUnlearned[profession].
 local T = C_TradeSkillUI
 
 local function flat(t, depth)
@@ -51,7 +51,8 @@ function ns.Probe()
       end
     end
   end
-  MarginDB.probeUnlearned = out
+  MarginDB.probeUnlearned = MarginDB.probeUnlearned or {}
+  MarginDB.probeUnlearned[out.prof or "unknown"] = out
   ns.Print(("probe saved: %d learned, %d unlearned, %d kept. /reload to write."):format(
     out.counts.learned, out.counts.unlearned, #out.unlearned))
 end
