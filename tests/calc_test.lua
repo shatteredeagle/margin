@@ -32,4 +32,26 @@ local a = { out = 7, qty = 1, diff = 0, ups = 1, reagents = { {item = 8, count =
 local b = { out = 8, qty = 1, diff = 0, ups = 1, reagents = { {item = 7, count = 1} } }
 local pc = { recipes = { a, b } }
 assert(ns.Evaluate(pc, { pc })[1].missing == 1)
+
+-- route: at skill 10 -> 14. A is orange to 14 (cheap, 10c), B is orange but dearer (50c).
+local A = { id = 1, out = 20, qty = 1, diff = 0, ups = 1, trivial = 30, reagents = { {item = 1, count = 1} } }
+local B = { id = 2, out = 21, qty = 1, diff = 0, ups = 1, trivial = 30, reagents = { {item = 2, count = 1} } }
+local pr = { skill = 10, max = 30, recipes = { A, B } }
+local plan = ns.Plan(pr, 14, { pr })
+assert(#plan.segs == 1 and plan.segs[1].row.r == A, "A wins")
+assert(plan.segs[1].from == 10 and plan.segs[1].to == 14)
+assert(plan.cost == 40 and plan.crafts == 4, plan.cost)
+assert(plan.shop[1].item == 1 and plan.shop[1].count == 4)
+-- an unpriced recipe is never chosen; with nothing priced the route is one gap
+local C = { id = 3, out = 22, qty = 1, diff = 0, ups = 1, trivial = 30, reagents = { {item = 3, count = 1} } }
+local pc2 = { skill = 10, max = 30, recipes = { C } }
+local gp = ns.Plan(pc2, 13, { pc2 })
+assert(#gp.segs == 1 and gp.segs[1].gap and gp.segs[1].to == 13)
+-- yellow recipe turns to chance .25 once past the estimated green edge
+assert(ns.RouteChance({ trivial = 30, diff = 1 }, 10, 10) == 0.75)
+assert(ns.RouteChance({ trivial = 30, diff = 1 }, 10, 25) == 0.25)
+assert(ns.RouteChance({ trivial = 30, diff = 3 }, 10, 10) == 0)
+-- missing items: item 3 only
+local mi = ns.MissingItems({ pc2 })
+assert(#mi == 1 and mi[1] == 3)
 print("calc ok")

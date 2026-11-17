@@ -41,6 +41,11 @@ SlashCmdList.MARGIN = function(msg)
   msg = (msg or ""):lower()
   if msg == "scan" then
     ns.Scan(true)
+  elseif msg:match("^route") then
+    local n = tonumber(msg:match("route%s+(%d+)"))
+    ns.SetOpt("routeTarget", n)
+    ns.Print(n and ("route target " .. n) or "route target: profession max")
+    if ns.RefreshUI then ns.RefreshUI() end
   elseif msg == "report" then
     ns.Report()
   elseif msg:match("^cut") then

@@ -6,6 +6,12 @@ local offset, total = 0, 0
 
 local DIFF_COLOR = { [0] = "ff8040", [1] = "ffff00", [2] = "40c040", [3] = "909090" }
 
+local HEADERS = {
+  profit = { "Recipe", "Cost", nil, "Profit" },
+  level = { "Recipe", "Cost", nil, "Cost / skill-up" },
+  route = { "Skill  recipe / shopping list", "Crafts / qty", "Per unit", "Cost" },
+}
+
 -- Own formatter: GetCoinTextureString is not available on Forever.
 local function money(c)
   if c == nil then return "?" end
@@ -19,6 +25,13 @@ local function money(c)
   local out = table.concat(parts, " ")
   return neg and ("|cffff6060-|r" .. out) or out
 end
+ns.Money = money
+
+local function itemName(id)
+  local n = C_Item.GetItemNameByID(id)
+  if not n then C_Item.RequestLoadItemDataByID(id) end
+  return n or ("item " .. id)
+end
 
 local function setOffset(v)
   local max = math.max(0, total - ROWS)
@@ -26,6 +39,19 @@ local function setOffset(v)
   frame.bar:SetMinMaxValues(0, max)
   frame.bar:SetValue(offset)
   ns.RefreshUI()
+end
+
+local function recipeTooltip(d)
+  GameTooltip:AddLine(d.r.name)
+  for _, l in ipairs(d.lines) do
+    GameTooltip:AddDoubleLine(l.count .. "x " .. itemName(l.item),
+      l.unit and (money(l.unit * l.count) .. " (" .. l.src .. ")") or "no price", 1, 1, 1, 1, 1, 1)
+  end
+  GameTooltip:AddDoubleLine("Cost", money(d.cost))
+  local vend, ah = ns.Revenue(d.r)
+  GameTooltip:AddDoubleLine("Vendor sale", money(vend))
+  GameTooltip:AddDoubleLine("AH sale (net)", money(ah))
+  GameTooltip:AddDoubleLine("Skill-up chance", ("%d%%"):format((ns.CHANCE[d.r.diff] or 0) * 100))
 end
 
 local function build()
@@ -44,18 +70,18 @@ local function build()
   tinsert(UISpecialFrames, "MarginFrame")
   frame.TitleText:SetText("Margin")
 
-  local function button(x, w, onclick)
+  local function button(x, w, text, onclick)
     local b = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
     b:SetSize(w, 22)
     b:SetPoint("TOPLEFT", x, -30)
+    b:SetText(text)
     b:SetScript("OnClick", onclick)
     return b
   end
-  frame.tProfit = button(12, 90, function() tab = "profit"; setOffset(0) end)
-  frame.tProfit:SetText("Profit")
-  frame.tLevel = button(106, 90, function() tab = "level"; setOffset(0) end)
-  frame.tLevel:SetText("Leveling")
-  frame.tProf = button(200, 120, function()
+  frame.tProfit = button(12, 80, "Profit", function() tab = "profit"; setOffset(0) end)
+  frame.tLevel = button(94, 80, "Leveling", function() tab = "level"; setOffset(0) end)
+  frame.tRoute = button(176, 80, "Route", function() tab = "route"; setOffset(0) end)
+  frame.tProf = button(262, 110, "Profession", function()
     local names = {}
     for n in pairs(ns.Char().profs) do names[#names + 1] = n end
     table.sort(names)
@@ -65,12 +91,11 @@ local function build()
     profName = names[idx]
     setOffset(0)
   end)
-  frame.tProf:SetText("Profession")
-  frame.tSort = button(324, 120, function()
+  frame.tSort = button(376, 110, "", function()
     ns.SetOpt("sortKey", ns.Opt("sortKey") == "vendor" and "ah" or "vendor")
     ns.RefreshUI()
   end)
-  frame.tAll = button(448, 130, function()
+  frame.tAll = button(490, 152, "", function()
     ns.SetOpt("showAll", not ns.Opt("showAll"))
     setOffset(0)
   end)
@@ -78,18 +103,18 @@ local function build()
   frame.info = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
   frame.info:SetPoint("TOPLEFT", 14, -60)
 
-  local hdr = function(text, x, w, just)
+  frame.hdr = {}
+  local function hdr(i, x, w, just)
     local fs = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     fs:SetPoint("TOPLEFT", x, -78)
     fs:SetWidth(w)
     fs:SetJustifyH(just or "RIGHT")
-    fs:SetText(text)
-    return fs
+    frame.hdr[i] = fs
   end
-  hdr("Recipe", 40, 230, "LEFT")
-  frame.hCost = hdr("Cost", 270, 120)
-  frame.hSale = hdr("Sale", 395, 110)
-  frame.hVal = hdr("Profit", 510, 120)
+  hdr(1, 40, 230, "LEFT")
+  hdr(2, 270, 120)
+  hdr(3, 395, 110)
+  hdr(4, 510, 120)
 
   frame.bar = CreateFrame("Slider", nil, frame)
   frame.bar:SetOrientation("VERTICAL")
@@ -133,25 +158,70 @@ local function build()
     row:EnableMouseWheel(true)
     row:SetScript("OnMouseWheel", function(_, d) setOffset(offset - d * 3) end)
     row:SetScript("OnEnter", function(self)
-      local d = self.data
-      if not d then return end
+      local e = self.entry
+      if not (e and (e.data or e.tip)) then return end
       GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-      GameTooltip:AddLine(d.r.name)
-      for _, l in ipairs(d.lines) do
-        local name = C_Item.GetItemNameByID(l.item) or ("item " .. l.item)
-        GameTooltip:AddDoubleLine(l.count .. "x " .. name,
-          l.unit and (money(l.unit * l.count) .. " (" .. l.src .. ")") or "no price", 1, 1, 1, 1, 1, 1)
-      end
-      GameTooltip:AddDoubleLine("Cost", money(d.cost))
-      local vend, ah = ns.Revenue(d.r)
-      GameTooltip:AddDoubleLine("Vendor sale", money(vend))
-      GameTooltip:AddDoubleLine("AH sale (net)", money(ah))
-      GameTooltip:AddDoubleLine("Skill-up chance", ("%d%%"):format((ns.CHANCE[d.r.diff] or 0) * 100))
+      if e.data then recipeTooltip(e.data) else e.tip(GameTooltip) end
       GameTooltip:Show()
     end)
     row:SetScript("OnLeave", GameTooltip_Hide)
     frame.rows[i] = row
   end
+end
+
+-- Entries are what the rows show: { icon, name, cost, sale, val, data | tip }.
+local function recipeEntry(d, kind, key)
+  local r = d.r
+  local vend, ah = ns.Revenue(r)
+  local sale = key == "ah" and ah or vend
+  local e = { icon = r.icon, data = d, sale = money(sale),
+    name = ("|cff%s%s|r"):format(DIFF_COLOR[r.diff] or "ffffff", r.name) }
+  if d.missing > 0 then
+    e.cost = ("|cffff9090%d reagent%s unpriced|r"):format(d.missing, d.missing > 1 and "s" or "")
+    e.val = "?"
+  else
+    e.cost = money(d.cost)
+    if kind == "profit" then
+      e.val = money(key == "ah" and d.ahProfit or d.vendorProfit)
+    elseif d.perUp then
+      e.val = money(d.perUp)
+    else
+      e.val = "|cff909090no skill-up|r"
+    end
+  end
+  return e
+end
+
+local function routeEntries(prof)
+  local target = ns.Opt("routeTarget") or prof.max
+  target = math.min(math.max(target, prof.skill + 1), prof.max)
+  local plan = ns.Plan(prof, target)
+  local list = {}
+  for _, seg in ipairs(plan.segs) do
+    if seg.gap then
+      list[#list + 1] = { name = ("|cffff9090%d-%d  no priced recipe|r"):format(seg.from, seg.to), cost = "", sale = "", val = "?" }
+    else
+      local r = seg.row.r
+      local n = math.ceil(seg.crafts)
+      list[#list + 1] = {
+        icon = r.icon, data = seg.row,
+        name = ("%d-%d  |cff%s%s|r"):format(seg.from, seg.to, DIFF_COLOR[r.diff] or "ffffff", r.name),
+        cost = ("~%d crafts"):format(n), sale = money(seg.row.cost), val = money(seg.cost),
+      }
+    end
+  end
+  list[#list + 1] = { name = "|cffffd700Shopping list|r", cost = "", sale = "", val = money(plan.shopCost) }
+  for _, it in ipairs(plan.shop) do
+    list[#list + 1] = {
+      icon = C_Item.GetItemIconByID(it.item), name = itemName(it.item),
+      cost = "x " .. it.count, sale = money(it.unit), val = money(it.unit and it.unit * it.count),
+      tip = function(tt)
+        tt:AddLine(itemName(it.item))
+        tt:AddDoubleLine("Source", it.src or "no price")
+      end,
+    }
+  end
+  return list, plan, target
 end
 
 function ns.RefreshUI()
@@ -162,17 +232,30 @@ function ns.RefreshUI()
   local key, showAll = ns.Opt("sortKey"), ns.Opt("showAll")
   frame.tSort:SetText(key == "ah" and "Sell: AH" or "Sell: vendor")
   frame.tAll:SetText(showAll and "Show: everything" or "Show: useful only")
-  frame.hSale:SetText(key == "ah" and "AH (net)" or "Vendor")
-  frame.hVal:SetText(tab == "profit" and "Profit" or "Cost / skill-up")
+  frame.tAll:SetEnabled(tab ~= "route")
+  local h = HEADERS[tab]
+  frame.hdr[1]:SetText(h[1])
+  frame.hdr[2]:SetText(h[2])
+  frame.hdr[3]:SetText(h[3] or (key == "ah" and "AH (net)" or "Vendor"))
+  frame.hdr[4]:SetText(h[4])
 
   local list = {}
   if prof then
-    local rows = ns.Evaluate(prof)
-    if tab == "profit" then list = ns.ProfitRows(rows, key, showAll) else list = ns.LevelingRows(rows, showAll) end
-    local priced = 0
-    for _, d in ipairs(rows) do if d.missing == 0 then priced = priced + 1 end end
-    frame.info:SetText(("%s %d/%d  -  %d recipes, %d priced, %d shown"):format(
-      profName, prof.skill, prof.max, #prof.recipes, priced, #list))
+    if tab == "route" then
+      local plan, target
+      list, plan, target = routeEntries(prof)
+      frame.info:SetText(("%s %d/%d  -  route to %d: ~%d crafts, %s  (estimate; /margin route <skill>)"):format(
+        profName, prof.skill, prof.max, target, math.ceil(plan.crafts), money(plan.cost)))
+    else
+      local rows = ns.Evaluate(prof)
+      local src
+      if tab == "profit" then src = ns.ProfitRows(rows, key, showAll) else src = ns.LevelingRows(rows, showAll) end
+      for _, d in ipairs(src) do list[#list + 1] = recipeEntry(d, tab, key) end
+      local priced = 0
+      for _, d in ipairs(rows) do if d.missing == 0 then priced = priced + 1 end end
+      frame.info:SetText(("%s %d/%d  -  %d recipes, %d priced, %d shown"):format(
+        profName, prof.skill, prof.max, #prof.recipes, priced, #list))
+    end
   else
     frame.info:SetText("Open a profession window once to scan it.")
   end
@@ -184,29 +267,15 @@ function ns.RefreshUI()
   frame.bar:SetValue(offset)
 
   for i = 1, ROWS do
-    local row, d = frame.rows[i], list[i + offset]
-    row.data = d
-    if d then
-      local r = d.r
-      row.icon:SetTexture(r.icon)
-      row.name:SetText(("|cff%s%s|r"):format(DIFF_COLOR[r.diff] or "ffffff", r.name))
-      local vend, ah = ns.Revenue(r)
-      local sale = key == "ah" and ah or vend
-      if d.missing > 0 then
-        row.cost:SetText(("|cffff9090%d reagent%s unpriced|r"):format(d.missing, d.missing > 1 and "s" or ""))
-        row.sale:SetText(money(sale))
-        row.val:SetText("?")
-      else
-        row.cost:SetText(money(d.cost))
-        row.sale:SetText(money(sale))
-        if tab == "profit" then
-          row.val:SetText(money(key == "ah" and d.ahProfit or d.vendorProfit))
-        elseif d.perUp then
-          row.val:SetText(money(d.perUp))
-        else
-          row.val:SetText("|cff909090no skill-up|r")
-        end
-      end
+    local row, e = frame.rows[i], list[i + offset]
+    row.entry = e
+    if e then
+      row.icon:SetTexture(e.icon)
+      row.icon:SetShown(e.icon ~= nil)
+      row.name:SetText(e.name)
+      row.cost:SetText(e.cost)
+      row.sale:SetText(e.sale)
+      row.val:SetText(e.val)
       row:Show()
     else
       row:Hide()
@@ -218,3 +287,13 @@ function ns.ToggleUI()
   if not frame then build() end
   if frame:IsShown() then frame:Hide() else frame:Show(); ns.RefreshUI() end
 end
+
+-- Item names arrive asynchronously; redraw once they have.
+local loader = CreateFrame("Frame")
+loader:RegisterEvent("GET_ITEM_INFO_RECEIVED")
+local queued
+loader:SetScript("OnEvent", function()
+  if queued or not (frame and frame:IsShown()) then return end
+  queued = true
+  C_Timer.After(0.3, function() queued = nil; ns.RefreshUI() end)
+end)
