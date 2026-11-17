@@ -3,9 +3,13 @@
 ## Notes: Profitable crafts and cheapest leveling recipes from your tradeskills, priced from Auctionator. Built for WoW Forever.
 ## Author: jesse
 ## X-License: MIT
-## Version: 0.0.1
-## OptionalDeps: Auctionator
+## Version: 0.1.0
+## Dependencies: Auctionator
 ## SavedVariables: MarginDB
 ## IconTexture: Interface\Icons\INV_Misc_Coin_01
 
-probe.lua
+Core.lua
+Prices.lua
+Scan.lua
+Calc.lua
+UI.lua
