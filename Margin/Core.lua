@@ -48,6 +48,9 @@ SlashCmdList.MARGIN = function(msg)
     ns.SetOpt("routeTarget", n)
     ns.Print(n and ("route target " .. n) or "route target: profession max")
     if ns.RefreshUI then ns.RefreshUI() end
+  elseif msg == "debug" then
+    MarginDB.debug = not MarginDB.debug
+    ns.Print("debug", MarginDB.debug and "on" or "off")
   elseif msg == "list" then
     ns.ToggleShopping()
   elseif msg == "probe" then

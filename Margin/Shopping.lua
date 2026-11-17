@@ -34,10 +34,48 @@ local function openItem(item)
   AuctionHouseFrame:SelectBrowseResult({ itemKey = key, minPrice = 0, totalQuantity = 0 })
 end
 
+-- The AH stays in an item's buy view (with its purchase pending) after a search, and
+-- selecting another item from there never gets its listings. Blizzard's Back button
+-- returns to browse mode first, so do that, then wait for the AH's search cooldown.
+local pending -- { item, count }
+
+local function debug(...)
+  if MarginDB and MarginDB.debug then ns.Print("[ah]", ...) end
+end
+
+local function backToBrowse()
+  local F, M = AuctionHouseFrame, AuctionHouseFrameDisplayMode
+  if not (F and M and F.GetDisplayMode and F.SetDisplayMode) then return false end
+  local mode = F:GetDisplayMode()
+  debug("display mode", tostring(mode), "Buy", tostring(M.Buy), "CommoditiesBuy", tostring(M.CommoditiesBuy), "ItemBuy", tostring(M.ItemBuy))
+  if mode == M.CommoditiesBuy or mode == M.ItemBuy then
+    F:SetDisplayMode(M.Buy)
+    return true
+  end
+  return false
+end
+
+local function throttleReady()
+  local AH = C_AuctionHouse
+  return not AH.IsThrottledMessageSystemReady or AH.IsThrottledMessageSystemReady()
+end
+
+local function go()
+  if not pending then return end
+  if not ahOpen() then pending = nil; return end
+  if not throttleReady() then debug("waiting for the AH cooldown"); return end -- AUCTION_HOUSE_THROTTLED_SYSTEM_READY retries
+  local p = pending
+  pending = nil
+  searching[p.item] = p.count
+  debug("selecting item", p.item, "count", p.count)
+  openItem(p.item)
+end
+
 local function search(item, count)
   if not (ahOpen() and AuctionHouseFrame.SelectBrowseResult) then return end
-  searching[item] = math.max(1, count or 1)
-  openItem(item)
+  pending = { item = item, count = count }
+  local wentBack = backToBrowse()
+  C_Timer.After(wentBack and 0.3 or 0, go)
 end
 
 -- Rows still to buy first (cheapest source is the AH or unknown), then vendor items, then done ones.
@@ -196,14 +234,16 @@ end
 
 local ev = CreateFrame("Frame")
 for _, e in ipairs({ "AUCTION_HOUSE_SHOW", "AUCTION_HOUSE_CLOSED", "COMMODITY_SEARCH_RESULTS_UPDATED",
-  "ITEM_SEARCH_RESULTS_UPDATED", "ITEM_KEY_ITEM_INFO_RECEIVED", "BAG_UPDATE_DELAYED", "GET_ITEM_INFO_RECEIVED" }) do
+  "ITEM_SEARCH_RESULTS_UPDATED", "ITEM_KEY_ITEM_INFO_RECEIVED", "AUCTION_HOUSE_THROTTLED_SYSTEM_READY", "BAG_UPDATE_DELAYED", "GET_ITEM_INFO_RECEIVED" }) do
   ev:RegisterEvent(e)
 end
 ev:SetScript("OnEvent", function(_, event, a)
   if event == "AUCTION_HOUSE_SHOW" then
     C_Timer.After(0.3, showAtAH)
+  elseif event == "AUCTION_HOUSE_THROTTLED_SYSTEM_READY" then
+    go()
   elseif event == "AUCTION_HOUSE_CLOSED" then
-    searching, keyWait = {}, nil
+    searching, keyWait, pending = {}, nil, nil
     if frame then frame:Hide() end
   elseif event == "COMMODITY_SEARCH_RESULTS_UPDATED" then
     local item = readable(a)
