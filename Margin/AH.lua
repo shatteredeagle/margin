@@ -212,6 +212,14 @@ local function build(parent)
   button:SetScript("OnLeave", GameTooltip_Hide)
 end
 
+local fullButton
+local function fullLabel()
+  local state, v = ns.FullScanState()
+  if state == "running" then return ("Scanning %d%%"):format(math.floor(v * 100)) end
+  if state == "cooldown" then return ("Full scan (%d:%02d)"):format(math.floor(v / 60), math.floor(v) % 60) end
+  return "Full scan"
+end
+
 local scanButton
 local function scanLabel()
   return "Scan: " .. (scanProfession() or "all")
@@ -249,6 +257,26 @@ local function buildList(parent)
     GameTooltip:Show()
   end)
   scanButton:SetScript("OnLeave", GameTooltip_Hide)
+
+  -- Margin's own full auction house scan: prices and supply for everything it watches, in one go
+  fullButton = CreateFrame("Button", "MarginAHFullButton", parent, "UIPanelButtonTemplate")
+  fullButton:SetSize(120, 22)
+  fullButton:SetPoint("RIGHT", scanButton, "LEFT", -4, 0)
+  fullButton:SetText(fullLabel())
+  fullButton:SetScript("OnClick", function() ns.FullScan() end)
+  local acc = 0
+  fullButton:SetScript("OnUpdate", function(self, elapsed)
+    acc = acc + elapsed
+    if acc > 0.5 then acc = 0; self:SetText(fullLabel()) end
+  end)
+  fullButton:SetScript("OnEnter", function(self)
+    GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+    GameTooltip:AddLine("Full scan")
+    GameTooltip:AddLine("Reads the whole auction house once and records the price and how much is for sale of every item Margin watches (your reagents, products and patterns). The AH allows one every 15 minutes, and the game may stutter for a moment.", 1, 1, 1, true)
+    GameTooltip:AddLine("Auctionator's prices are still used when it is installed, unless this is newer.", 0.7, 0.7, 0.7, true)
+    GameTooltip:Show()
+  end)
+  fullButton:SetScript("OnLeave", GameTooltip_Hide)
 end
 
 local function onShow(tries)
@@ -261,6 +289,11 @@ local function onShow(tries)
   if not listButton then buildList(parent) end
   if scanButton then scanButton:SetText(scanLabel()) end
   updateText()
+  -- with no Auctionator there is no other source of prices: scan by itself when the AH opens (once the
+  -- 15-minute limit allows), unless turned off with /margin autoscan off
+  local auto = ns.Opt("autoFullScan")
+  if auto == nil then auto = not Auctionator end
+  if auto and ns.FullScanState() == "ready" then C_Timer.After(2, function() if ns.FullScanState() == "ready" then ns.FullScan() end end) end
   button:Show()
 end
 

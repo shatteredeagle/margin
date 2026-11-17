@@ -59,9 +59,19 @@ function ns.VendorBuy(itemID)
   return best
 end
 
+-- Auctionator's price when it has one, else Margin's own. When both exist the newer one wins (Margin's
+-- own full scan or search can be fresher than Auctionator's last visit).
 function ns.AHPrice(itemID)
   local A = auctionator()
-  return (A and A.GetAuctionPriceByItemID(API, itemID)) or ns.Observed(itemID)
+  local theirs = A and A.GetAuctionPriceByItemID(API, itemID)
+  local ours = ns.Observed(itemID)
+  if theirs and ours then
+    local o = MarginDB.prices[itemID]
+    local age = A.GetAuctionAgeByItemID and A.GetAuctionAgeByItemID(API, itemID) -- days since Auctionator saw it
+    if type(age) == "number" and (time() - o.t) / 86400 < age then return ours end
+    return theirs
+  end
+  return theirs or ours
 end
 
 -- Cheapest unit price to acquire an item: vendor or AH.

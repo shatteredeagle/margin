@@ -101,6 +101,13 @@ SlashCmdList.MARGIN = function(msg)
     ns.Print(ns.Opt("useRep") and "using my reputation (discounts seen at vendors, unlocked patterns)"
       or "using base prices (worst case, ignores reputation)")
     if ns.RefreshUI then ns.RefreshUI() end
+  elseif msg == "fullscan" then
+    ns.FullScan()
+  elseif msg:match("^autoscan") then
+    local m = msg:match("autoscan%s+(%a+)")
+    if m == "on" or m == "off" then ns.SetOpt("autoFullScan", m == "on") end
+    local auto = ns.Opt("autoFullScan")
+    ns.Print("scan the AH by itself when it opens:", auto == nil and ("default (" .. (Auctionator and "off, Auctionator is installed" or "on") .. ")") or tostring(auto))
   elseif msg == "buy" then
     ns.ToggleMerchant()
   elseif msg == "debug" then

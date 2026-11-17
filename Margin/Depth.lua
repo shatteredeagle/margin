@@ -41,3 +41,27 @@ function ns.WalkCost(itemID, n)
   end
   return cost, got
 end
+
+-- Folding a full AH scan into per-item listings, one auction at a time (so a scan of tens of thousands of
+-- auctions never has to be held whole). `by` collects { price per unit, units } for watched items only.
+function ns.AddListing(by, watch, itemID, count, buyout)
+  if not (itemID and watch[itemID] and count and count > 0 and buyout and buyout > 0) then return end
+  local list = by[itemID]
+  if not list then list = {}; by[itemID] = list end
+  list[#list + 1] = { buyout / count, count }
+end
+
+-- Per watched item: the lowest unit price, and the cheapest `keep` listings flattened as Depth stores them.
+-- Watched items nobody lists come out with no price and an empty book (supply 0).
+function ns.FinishListings(by, watch, keep)
+  keep = keep or 40
+  local out = {}
+  for item in pairs(watch) do
+    local list = by[item] or {}
+    table.sort(list, function(a, b) return a[1] < b[1] end)
+    local flat = {}
+    for i = 1, math.min(#list, keep) do flat[#flat + 1] = list[i][1]; flat[#flat + 1] = list[i][2] end
+    out[item] = { price = list[1] and math.floor(list[1][1]) or nil, flat = flat, capped = #list > keep }
+  end
+  return out
+end

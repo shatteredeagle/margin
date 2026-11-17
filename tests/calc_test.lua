@@ -342,4 +342,22 @@ local held = ns.Plan(ps, 40, { ps }, false)
 assert(held.segs[1].to == 35, held.segs[1].to)
 ns.Owned = function() return 0 end
 MarginDB = nil
+
+-- folding a full scan into per-item prices and listings, for watched items only
+MarginDB = { depth = {} }
+local by, watch = {}, { [500] = true, [501] = true, [502] = true }
+ns.AddListing(by, watch, 500, 4, 600)    -- 4 units for 6s: 1s 50c each
+ns.AddListing(by, watch, 500, 10, 1000)  -- 10 units for 10s: 1s each (cheaper)
+ns.AddListing(by, watch, 999, 1, 100)    -- not watched: ignored
+ns.AddListing(by, watch, 501, 0, 100)    -- nothing for sale in that row: ignored
+ns.AddListing(by, watch, 501, 3, 0)      -- no buyout: ignored
+local fin = ns.FinishListings(by, watch, 40)
+assert(fin[500].price == 100 and #fin[500].flat == 4 and fin[500].flat[1] == 100 and fin[500].flat[2] == 10, "cheapest first")
+assert(fin[501].price == nil and #fin[501].flat == 0, "watched but nobody lists it: supply 0")
+assert(fin[999] == nil)
+local many = {}
+for i = 1, 60 do ns.AddListing(many, { [700] = true }, 700, 1, i * 100) end
+local cut = ns.FinishListings(many, { [700] = true }, 40)
+assert(#cut[700].flat == 80 and cut[700].capped, "keeps the 40 cheapest and says there were more")
+MarginDB = nil
 print("calc ok")

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Margin's own full AH scan.** A "Full scan" button (and `/margin fullscan`) reads the whole auction house once and records the price and how much is for sale of every item Margin watches (reagents, products, pattern items): no item-by-item lookups. The AH allows one every 15 minutes. Without Auctionator it runs by itself when you open the AH (`/margin autoscan on|off` to change that). When Auctionator is installed its prices are still used, unless Margin's own scan is newer.
+
 - **The AH's supply is now part of the plan.** Margin records how much of an item is actually listed (and at what prices) whenever an AH search shows it. The planner spends each item's supply in skill order and switches to other recipes when it runs out (what you already hold counts), the route says which items limit it, and the shopping lists flag "only N on the AH" and cost the purchase by walking the listings cheapest first instead of assuming the lowest price for every unit. Supply data is kept for 3 days; items never looked at are assumed plentiful, so the AH button ("Margin: N to look up", was "unpriced") now also looks up the route's AH items whose listings it has not seen.
 
 - Fixed: recipe items filed under a different skill line than their profession were ignored (First Aid's manuals use another line number), so those recipes never got a pattern source. The recipe's own profession is what counts now. Forever's own rank and the vendor price Polestar lists are used ahead of the Classic table, and manuals that need more skill than your current cap still show where they come from in the "Recipes: all" view.
