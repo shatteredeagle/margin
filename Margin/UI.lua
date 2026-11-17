@@ -3,6 +3,7 @@ local _, ns = ...
 local ROWS, ROW_H = 16, 20
 local frame, tab, profName = nil, "profit", nil
 local offset, total = 0, 0
+local sortCol, sortAsc = nil, false -- clicked column (1 name, 2 cost, 3 sale, 4 profit/per-up)
 
 local DIFF_COLOR = { [0] = "ff8040", [1] = "ffff00", [2] = "40c040", [3] = "909090" }
 
@@ -54,6 +55,45 @@ local function recipeTooltip(d)
   GameTooltip:AddDoubleLine("Skill-up chance", ("%d%%"):format((ns.CHANCE[d.r.diff] or 0) * 100))
 end
 
+function ns.SortBy(col, btn)
+  if tab == "route" then return end
+  if btn == "RightButton" then
+    sortCol = nil
+  elseif sortCol == col then
+    sortAsc = not sortAsc
+  else
+    sortCol = col
+    sortAsc = col == 1 or col == 2 or (col == 4 and tab == "level")
+  end
+  setOffset(0)
+end
+
+local function matches(d, q)
+  if d.r.name:lower():find(q, 1, true) then return true end
+  for _, l in ipairs(d.lines) do
+    local n = C_Item.GetItemNameByID(l.item)
+    if n and n:lower():find(q, 1, true) then return true end
+  end
+end
+
+local SORT_KEYS = { "sortName", "sortCost", "sortSale", "sortVal" }
+
+-- Sorts by the clicked column; entries with no value for it always go last.
+local function sortEntries(list)
+  local k = SORT_KEYS[sortCol]
+  for i, e in ipairs(list) do e.i = i end
+  table.sort(list, function(a, b)
+    local x, y = a[k], b[k]
+    if x == nil or y == nil then
+      if x == y then return a.i < b.i end
+      return x ~= nil
+    end
+    if x == y then return a.i < b.i end
+    if sortAsc then return x < y end
+    return x > y
+  end)
+end
+
 local function build()
   frame = CreateFrame("Frame", "MarginFrame", UIParent, "BasicFrameTemplateWithInset")
   frame:SetSize(660, 420)
@@ -102,14 +142,43 @@ local function build()
 
   frame.info = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
   frame.info:SetPoint("TOPLEFT", 14, -60)
+  frame.info:SetWidth(440)
+  frame.info:SetJustifyH("LEFT")
+  frame.info:SetWordWrap(false)
+
+  frame.searchLabel = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+  frame.searchLabel:SetPoint("TOPLEFT", 470, -62)
+  frame.searchLabel:SetText("Search")
+  frame.search = CreateFrame("EditBox", nil, frame, "InputBoxTemplate")
+  frame.search:SetSize(130, 18)
+  frame.search:SetPoint("TOPRIGHT", -34, -58)
+  frame.search:SetAutoFocus(false)
+  frame.search:SetMaxLetters(40)
+  frame.search:SetScript("OnTextChanged", function(_, user) if user then setOffset(0) end end)
+  frame.search:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
+  frame.search:SetScript("OnEscapePressed", function(self)
+    self:SetText(""); self:ClearFocus(); setOffset(0)
+  end)
 
   frame.hdr = {}
   local function hdr(i, x, w, just)
-    local fs = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    fs:SetPoint("TOPLEFT", x, -78)
-    fs:SetWidth(w)
-    fs:SetJustifyH(just or "RIGHT")
-    frame.hdr[i] = fs
+    local b = CreateFrame("Button", nil, frame)
+    b:SetPoint("TOPLEFT", x, -78)
+    b:SetSize(w, 14)
+    b:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+    b.text = b:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    b.text:SetAllPoints()
+    b.text:SetJustifyH(just or "RIGHT")
+    b:SetScript("OnClick", function(_, btn) ns.SortBy(i, btn) end)
+    b:SetScript("OnEnter", function(self)
+      if tab == "route" then return end
+      GameTooltip:SetOwner(self, "ANCHOR_TOP")
+      GameTooltip:AddLine("Click to sort, click again to reverse.", 1, 1, 1)
+      GameTooltip:AddLine("Right-click: back to the default order.", 0.7, 0.7, 0.7)
+      GameTooltip:Show()
+    end)
+    b:SetScript("OnLeave", GameTooltip_Hide)
+    frame.hdr[i] = b
   end
   hdr(1, 40, 230, "LEFT")
   hdr(2, 270, 120)
@@ -174,16 +243,19 @@ local function recipeEntry(d, kind, key)
   local r = d.r
   local vend, ah = ns.Revenue(r)
   local sale = key == "ah" and ah or vend
-  local e = { icon = r.icon, data = d, sale = money(sale),
+  local e = { icon = r.icon, data = d, sale = money(sale), sortName = r.name:lower(), sortSale = sale,
     name = ("|cff%s%s|r"):format(DIFF_COLOR[r.diff] or "ffffff", r.name) }
   if d.missing > 0 then
     e.cost = ("|cffff9090%d reagent%s unpriced|r"):format(d.missing, d.missing > 1 and "s" or "")
     e.val = "?"
   else
     e.cost = money(d.cost)
+    e.sortCost = d.cost
     if kind == "profit" then
-      e.val = money(key == "ah" and d.ahProfit or d.vendorProfit)
+      e.sortVal = key == "ah" and d.ahProfit or d.vendorProfit
+      e.val = money(e.sortVal)
     elseif d.perUp then
+      e.sortVal = d.perUp
       e.val = money(d.perUp)
     else
       e.val = "|cff909090no skill-up|r"
@@ -238,10 +310,13 @@ function ns.RefreshUI()
   frame.tProf:SetText(profName or "Profession")
   frame.tProf:SetEnabled(count > 1)
   local h = HEADERS[tab]
-  frame.hdr[1]:SetText(h[1])
-  frame.hdr[2]:SetText(h[2])
-  frame.hdr[3]:SetText(h[3] or (key == "ah" and "AH (net)" or "Vendor"))
-  frame.hdr[4]:SetText(h[4])
+  local titles = { h[1], h[2], h[3] or (key == "ah" and "AH (net)" or "Vendor"), h[4] }
+  for i = 1, 4 do
+    local arrow = (tab ~= "route" and sortCol == i) and (sortAsc and " ^" or " v") or ""
+    frame.hdr[i].text:SetText(titles[i] .. arrow)
+  end
+  frame.search:SetShown(tab ~= "route")
+  frame.searchLabel:SetShown(tab ~= "route")
 
   local list = {}
   if prof then
@@ -254,7 +329,11 @@ function ns.RefreshUI()
       local rows = ns.Evaluate(prof)
       local src
       if tab == "profit" then src = ns.ProfitRows(rows, key, showAll) else src = ns.LevelingRows(rows, showAll) end
-      for _, d in ipairs(src) do list[#list + 1] = recipeEntry(d, tab, key) end
+      local q = frame.search:GetText():lower()
+      for _, d in ipairs(src) do
+        if q == "" or matches(d, q) then list[#list + 1] = recipeEntry(d, tab, key) end
+      end
+      if sortCol then sortEntries(list) end
       local priced = 0
       for _, d in ipairs(rows) do if d.missing == 0 then priced = priced + 1 end end
       frame.info:SetText(("%s %d/%d  -  %d recipes, %d priced, %d shown"):format(
