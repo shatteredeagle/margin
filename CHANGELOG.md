@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.1.3-alpha
+
+- **Fixed: the vendor Sell buttons never sold.** The two-click confirm remembered the row, but the rows are rebuilt on every refresh, so the second click never matched the first. It now remembers the item.
 
 - One sign convention for money you earn or lose: green + when you come out ahead, red - when you lose money. It applies to the Profit column, "Net / skill-up" on Leveling, the Route steps and comparison cards (the difference to the selected option now reads + when it is better for you), and the recipe tooltip. Plain costs (Cost columns, shopping list, fees) stay unsigned.
 

@@ -392,7 +392,7 @@ local function build()
     row.buy:SetScript("OnClick", function()
       local d = row.data
       if not d then return end
-      if d.sell then arm(d, { d }) else buyOne(d) end
+      if d.sell then arm(d.item, { d }) else buyOne(d) end -- keyed by item: the rows are rebuilt on every refresh
     end)
     row.name = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     row.name:SetPoint("TOPLEFT", row.btn, "TOPRIGHT", 8, 0)
@@ -462,7 +462,7 @@ function ns.RefreshMerchant()
           r.ahBetter and ("  |cffffd070AH ~%s each|r"):format(ns.Money(r.ahNet)) or ""))
         row.name:SetTextColor(1, 1, 1)
         row.buy:SetShown(true)
-        row.buy:SetText(armed and armed.key == r and ("Sure? %d"):format(r.count) or ("Sell %d"):format(r.count))
+        row.buy:SetText(armed and armed.key == r.item and ("Sure? %d"):format(r.count) or ("Sell %d"):format(r.count))
         row.buy:SetEnabled(not sellBusy)
       elseif r.cheaper then
         row.sub:SetText("|cffffd070the AH is cheaper|r")
