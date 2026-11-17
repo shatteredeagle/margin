@@ -445,6 +445,12 @@ end
 redraw = function()
   if not frame or not frame:IsShown() then return end
   layout(tab == "route")
+  -- The current tab's button is greyed out and highlighted, so you can see where you are.
+  for name, b in pairs({ profit = frame.tProfit, level = frame.tLevel, route = frame.tRoute }) do
+    local selected = tab == name
+    b:SetEnabled(not selected)
+    if selected then b:LockHighlight() else b:UnlockHighlight() end
+  end
   local profs = ns.Char().profs
   if not profName or not profs[profName] then profName = next(profs) end
   local prof = profName and profs[profName]
