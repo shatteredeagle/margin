@@ -57,6 +57,12 @@ function ns.Dump()
       name, tostring(prof.skill), tostring(prof.scanSkill), tostring(prof.max), #prof.recipes, #(prof.unlearned or {}),
       date("%H:%M:%S", prof.time or 0), prof.dirty and ", NEEDS REFRESH" or "")
   end
+  local nb, tight = 0, 0
+  for _, b in pairs(MarginDB.bands or {}) do
+    nb = nb + 1
+    if (b.y1 and b.y2 and b.y1 >= b.y2 - 3) or (b.g1 and b.g2 and b.g1 >= b.g2 - 3) then tight = nb end
+  end
+  out[#out + 1] = ("colour edges observed for %d recipes"):format(nb)
   local plan, prof, name = ns.CurrentPlan()
   if plan then
     local lock = ns.Char().locks and ns.Char().locks[name]

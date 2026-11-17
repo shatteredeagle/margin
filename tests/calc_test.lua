@@ -212,4 +212,22 @@ assert(#ns.Evaluate(pall, { pall }, false, false) == 1)
 assert(#ns.Evaluate(pall, { pall }, true, false) == 2)
 local allRows = ns.Evaluate(pall, { pall }, false, true)
 assert(#allRows == 3 and allRows[2].learn and allRows[2].learn.how == "trainer" and allRows[3].learn == nil)
+
+-- observed colour edges narrow the estimate
+MarginDB = { bands = {} }
+oddsMode = "worst"
+local rb = { id = 500, trivial = 60, diff = 0 }
+assert(ns.RouteChance(rb, 10, 30) == 0.25, "no observations: the one-third guess has turned yellow by 30")
+MarginDB.bands[500] = { y1 = 35, y2 = 40 }
+assert(ns.RouteChance(rb, 10, 30) == 1, "observed orange until at least 35")
+assert(ns.RouteChance(rb, 10, 36) == 0.25 or ns.RouteChance(rb, 10, 36) == 1) -- inside the range: either side is fine
+-- observing: orange at 120, then yellow at 130
+MarginDB.bands = {}
+ns.ObserveBands({ { id = 7, diff = 0 } }, 120)
+ns.ObserveBands({ { id = 7, diff = 1 } }, 130)
+assert(MarginDB.bands[7].y1 == 121 and MarginDB.bands[7].y2 == 130 and MarginDB.bands[7].g1 == 131)
+ns.ObserveBands({ { id = 7, diff = 1, train = true } }, 135) -- unlearned entries are not observations
+assert(MarginDB.bands[7].g1 == 131)
+oddsMode = "typical"
+MarginDB = nil
 print("calc ok")

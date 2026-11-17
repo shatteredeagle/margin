@@ -122,6 +122,7 @@ function ns.Scan(verbose)
     end
   end
 
+  ns.ObserveBands(recipes, base.skillLevel) -- before recipes just learned are mixed in below
   local before = ns.Char().profs[base.professionName]
   local oldSkill = before and before.skill
   -- recipes learned a moment ago can be missing from the game's list for a few seconds: keep them

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Margin now learns when each recipe changes colour: every scan records the colour it saw, and where a recipe changed between scans the planner uses the narrowed range instead of the one-third guess. It tightens as you level and is shared by all your characters.
+
 - The profession-window Margin button now shows at a default spot even if looking for a better one fails.
 
 ## 0.1.2-alpha

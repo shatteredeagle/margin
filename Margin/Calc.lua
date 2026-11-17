@@ -248,9 +248,45 @@ function ns.RouteChance(r, s0, s)
   elseif r.diff == 1 then
     G = s0 + (H - s0) / (worst and 3 or 2)
   end
+  -- What earlier scans showed narrows the guess: the edge is somewhere in [y1, y2] / [g1, g2].
+  local b = MarginDB and MarginDB.bands and r.id and MarginDB.bands[r.id]
+  if b then
+    local function clamp(v, lo, hi)
+      if lo and v < lo then v = lo end
+      if hi and v > hi then v = hi end
+      return v
+    end
+    if r.diff == 0 then Y = clamp(Y, b.y1, b.y2) end
+    if r.diff <= 1 then G = clamp(G, b.g1, b.g2) end
+    if G < Y then G = Y end
+  end
   if s < Y then return ns.Odds(0) end
   if s < G then return ns.Odds(1) end
   return ns.Odds(2)
+end
+
+-- Remember the colour each learned recipe had at a skill. Orange at 120 means it stays orange
+-- until at least 121; yellow at 130 means it has turned yellow by 130 and not green before 131.
+-- The edges come out as ranges that tighten with every scan, shared by all your characters.
+function ns.ObserveBands(recipes, skill)
+  if not (MarginDB and skill) then return end
+  MarginDB.bands = MarginDB.bands or {}
+  for _, r in ipairs(recipes) do
+    local d = r.diff
+    if r.id and d and d < 3 and not r.train and not r.teach and not r.extra and not r.learnedAt then
+      local b = MarginDB.bands[r.id]
+      if not b then b = {}; MarginDB.bands[r.id] = b end
+      local function lo(k, v) if not b[k] or v > b[k] then b[k] = v end end
+      local function hi(k, v) if not b[k] or v < b[k] then b[k] = v end end
+      if d == 0 then
+        lo("y1", skill + 1)
+      elseif d == 1 then
+        hi("y2", skill); lo("g1", skill + 1)
+      else
+        hi("y2", skill); hi("g2", skill)
+      end
+    end
+  end
 end
 
 -- Expand r x mult into base (non-crafted) materials, following craft-priced reagents. `prep`
