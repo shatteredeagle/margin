@@ -18,4 +18,17 @@ assert(rows[2].missing == 1)
 assert(#ns.ProfitRows(rows, "vendor") == 2)
 local lv = ns.LevelingRows(rows)
 assert(lv[1].perUp == 140)
+
+-- crafted intermediate: item 5 is unpriced but craftable from 2x item 1 (10c each)
+local inter = { out = 5, qty = 2, diff = 0, ups = 1, reagents = { {item = 1, count = 4} } }
+local user = { out = 9, qty = 1, diff = 0, ups = 1, reagents = { {item = 5, count = 3} } }
+local prof = { recipes = { inter, user } }
+local r2 = ns.Evaluate(prof, { prof })
+assert(r2[2].missing == 0 and r2[2].cost == 60, r2[2].cost) -- 3 * (40/2)
+assert(r2[2].lines[1].src == "craft")
+-- cycle guard: A needs B needs A, nothing priced
+local a = { out = 7, qty = 1, diff = 0, ups = 1, reagents = { {item = 8, count = 1} } }
+local b = { out = 8, qty = 1, diff = 0, ups = 1, reagents = { {item = 7, count = 1} } }
+local pc = { recipes = { a, b } }
+assert(ns.Evaluate(pc, { pc })[1].missing == 1)
 print("calc ok")

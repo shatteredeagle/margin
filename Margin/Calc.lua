@@ -4,15 +4,49 @@ local _, ns = ...
 local CHANCE = { [0] = 1.0, [1] = 0.75, [2] = 0.25, [3] = 0 }
 ns.CHANCE = CHANCE
 
+-- Output item -> recipe, over every scanned profession of this character, so a
+-- reagent you can craft yourself is priced at its craft cost when that is cheaper.
+local function craftIndex(profs)
+  local idx = {}
+  for _, prof in pairs(profs) do
+    for _, r in ipairs(prof.recipes) do
+      if r.out and not idx[r.out] then idx[r.out] = r end
+    end
+  end
+  return idx
+end
+
+-- Unit price of an item: cheapest of vendor, AH, or crafting it. Returns
+-- copper, source ("vendor" | "ah" | "craft") or nil.
+local function unitPrice(item, idx, visiting)
+  local buy, src = ns.BuyPrice(item)
+  local r = idx[item]
+  if r and not visiting[item] then
+    visiting[item] = true
+    local total, ok = 0, true
+    for _, rg in ipairs(r.reagents) do
+      local u = unitPrice(rg.item, idx, visiting)
+      if u then total = total + u * rg.count else ok = false break end
+    end
+    visiting[item] = nil
+    if ok then
+      local craft = total / r.qty
+      if not buy or craft < buy then return craft, "craft" end
+    end
+  end
+  return buy, src
+end
+
 -- Cost of one craft. Returns total copper, list of reagent lines, missing count.
-function ns.RecipeCost(r)
+function ns.RecipeCost(r, idx)
+  idx = idx or {}
   local total, lines, missing = 0, {}, 0
   for _, rg in ipairs(r.reagents) do
-    local unit, src = ns.BuyPrice(rg.item)
+    local unit, src = unitPrice(rg.item, idx, { [r.out or 0] = true })
     lines[#lines + 1] = { item = rg.item, count = rg.count, unit = unit, src = src }
     if unit then total = total + unit * rg.count else missing = missing + 1 end
   end
-  return total, lines, missing
+  return math.floor(total), lines, missing
 end
 
 -- Net proceeds of selling the result: vendor sell price, and AH price after the cut.
@@ -26,10 +60,11 @@ function ns.Revenue(r)
 end
 
 -- One row per craftable recipe with cost, both profit figures and cost per skill-up.
-function ns.Evaluate(prof)
+function ns.Evaluate(prof, profs)
   local rows = {}
+  local idx = craftIndex(profs or (ns.Char and ns.Char().profs) or { prof })
   for _, r in ipairs(prof.recipes) do
-    local cost, lines, missing = ns.RecipeCost(r)
+    local cost, lines, missing = ns.RecipeCost(r, idx)
     local vend, ah = ns.Revenue(r)
     local chance = (CHANCE[r.diff] or 0) * r.ups
     rows[#rows + 1] = {
