@@ -1,8 +1,19 @@
 local _, ns = ...
 
 -- Skill-up chance by relative difficulty (orange, yellow, green, grey).
-local CHANCE = { [0] = 1.0, [1] = 0.75, [2] = 0.25, [3] = 0 }
-ns.CHANCE = CHANCE
+-- Skill-up chance by colour (0 orange, 1 yellow, 2 green, 3 grey). Orange always raises the skill.
+-- Within a colour the chance falls as you level: roughly 75% -> 25% across yellow and 25% -> 0% across
+-- green. "worst" (the default, so you do not run short of materials) plans with the bottom of each band;
+-- "typical" with the middle. Green keeps a 5% floor so a stretch with only green recipes still plans.
+local ODDS = {
+  worst = { [0] = 1.0, [1] = 0.25, [2] = 0.05, [3] = 0 },
+  typical = { [0] = 1.0, [1] = 0.75, [2] = 0.25, [3] = 0 },
+}
+function ns.Odds(band)
+  local t = ODDS[ns.Opt("odds")] or ODDS.worst
+  return t[band] or 0
+end
+ns.CHANCE = ODDS.typical -- kept for older callers; use ns.Odds
 
 -- Output item -> recipe, over every scanned profession of this character, so a
 -- reagent you can craft yourself is priced at its craft cost when that is cheaper.
@@ -109,7 +120,7 @@ function ns.Evaluate(prof, profs, includeTrainer)
   for _, r in ipairs(list) do
     local cost, lines, missing = ns.RecipeCost(r, idx)
     local vend, ah = ns.Revenue(r)
-    local chance = (CHANCE[r.diff] or 0) * r.ups
+    local chance = ns.Odds(r.diff) * r.ups
     local resale = ns.ResaleValue(vend, ah)
     local learn, unavailable
     if r.train then
@@ -198,16 +209,24 @@ end
 function ns.RouteChance(r, s0, s)
   local H = r.trivial
   if not H or s >= H or r.diff == 3 then return 0 end
+  -- Where the colours change is unknown (only the grey level is). Typical odds put the next change
+  -- half way to grey; worst-case odds assume the colours fade sooner, a third of the way each.
+  local worst = ns.Opt("odds") ~= "typical"
   local Y, G = -1, -1
   if r.diff == 0 then
-    Y = s0 + (H - s0) / 2
-    G = (Y + H) / 2
+    if worst then
+      Y = s0 + (H - s0) / 3
+      G = s0 + (H - s0) * 2 / 3
+    else
+      Y = s0 + (H - s0) / 2
+      G = (Y + H) / 2
+    end
   elseif r.diff == 1 then
-    G = (s0 + H) / 2
+    G = s0 + (H - s0) / (worst and 3 or 2)
   end
-  if s < Y then return 1 end
-  if s < G then return 0.75 end
-  return 0.25
+  if s < Y then return ns.Odds(0) end
+  if s < G then return ns.Odds(1) end
+  return ns.Odds(2)
 end
 
 -- Expand r x mult into base (non-crafted) materials, following craft-priced reagents. `prep`

@@ -1,6 +1,7 @@
 -- Offline check of Calc.lua with stubbed prices. Run: lua tests/calc_test.lua
 local resaleMode = "off"
-local ns = { Opt = function(k) if k == "resale" then return resaleMode elseif k == "ahChance" then return 0.8 end return 0.05 end }
+local oddsMode = "typical"
+local ns = { Opt = function(k) if k == "resale" then return resaleMode elseif k == "ahChance" then return 0.8 elseif k == "odds" then return oddsMode end return 0.05 end }
 local depositEach = 0
 ns.Deposit = function() return depositEach end
 ns.AHNetPerUnit = function(id)
@@ -156,4 +157,21 @@ assert(#picks == 2 and picks[1].id == 61 and picks[2].id == 60)
 FB.reagents = { {item = 999, count = 1} }
 local fallback = ns.Plan(pf, 18, { pf }, false, ns.ForceFromPicks({ { id = 61, from = 14, to = 16 } }))
 assert(fallback.segs[1].row.r == FA)
+
+-- worst-case odds: yellow plans at 25%, green at the 5% floor, orange stays 100%, bands fade sooner
+oddsMode = "worst"
+assert(ns.Odds(0) == 1 and ns.Odds(1) == 0.25 and ns.Odds(2) == 0.05 and ns.Odds(3) == 0)
+assert(ns.RouteChance({ trivial = 30, diff = 1 }, 10, 10) == 0.25)
+assert(ns.RouteChance({ trivial = 30, diff = 0 }, 10, 10) == 1)
+-- orange at s0=10, grey at 40: orange to 20, yellow to 30, green after (thirds)
+assert(ns.RouteChance({ trivial = 40, diff = 0 }, 10, 19) == 1)
+assert(ns.RouteChance({ trivial = 40, diff = 0 }, 10, 21) == 0.25)
+assert(ns.RouteChance({ trivial = 40, diff = 0 }, 10, 31) == 0.05)
+-- a yellow recipe plans 4 crafts per skill-up in worst case, not 1.33
+local Yw = { id = 80, out = 81, qty = 1, diff = 1, ups = 1, trivial = 60, reagents = { {item = 1, count = 1} } }
+local pyw = { skill = 10, max = 60, recipes = { Yw } }
+local rowsYw = ns.Evaluate(pyw, { pyw })
+assert(rowsYw[1].chance == 0.25 and rowsYw[1].perUp == 40, rowsYw[1].perUp)
+oddsMode = "typical"
+assert(ns.Evaluate(pyw, { pyw })[1].chance == 0.75)
 print("calc ok")

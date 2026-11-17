@@ -74,7 +74,8 @@ local function recipeTooltip(d)
   local vend, ah = ns.Revenue(d.r)
   GameTooltip:AddDoubleLine("Vendor sale", money(vend))
   GameTooltip:AddDoubleLine("AH sale (net)", money(ah))
-  GameTooltip:AddDoubleLine("Skill-up chance", ("%d%%"):format((ns.CHANCE[d.r.diff] or 0) * 100))
+  GameTooltip:AddDoubleLine(ns.Opt("odds") == "typical" and "Skill-up chance (typical)" or "Skill-up chance (worst case)",
+    ("%d%%"):format(ns.Odds(d.r.diff) * 100))
   if d.net and (ns.Opt("resale") or "off") ~= "off" then
     GameTooltip:AddDoubleLine("Net per craft (cost - resale)", d.net < 0 and ("|cff60ff60-|r" .. money(-d.net) .. " |cff60ff60profit|r") or money(d.net))
   end
@@ -519,7 +520,7 @@ function ns.CurrentPlan()
   char.locks = char.locks or {}
   local useLock = ns.Opt("routeLock") and not ns.Opt("noLock")
   local lockKey = table.concat({ tostring(ns.Opt("resale")), tostring(ns.Opt("useTrainer")),
-    ns.Opt("useRep") and "rep" or "base", target }, "|")
+    ns.Opt("useRep") and "rep" or "base", tostring(ns.Opt("odds")), target }, "|")
   local lock = useLock and char.locks[name] or nil
   if lock and lock.key ~= lockKey then lock = nil; char.locks[name] = nil end
 
@@ -716,7 +717,8 @@ redraw = function()
       list = cache.list
       local lock = ns.Char().locks and ns.Char().locks[profName]
       frame.info:SetText(("%s %d/%d  -  route to %d%s"):format(profName, prof.skill, prof.max, cache.target,
-        lock and ns.Opt("routeLock") and ("  |cff909090(locked %s)|r"):format(date("%b %d", lock.t)) or ""))
+        (lock and ns.Opt("routeLock") and ("  |cff909090(locked %s)|r"):format(date("%b %d", lock.t)) or "")
+          .. ("  |cff909090%s odds|r"):format(ns.Opt("odds") == "typical" and "typical" or "worst-case")))
       for i, c in ipairs(frame.cards) do
         local d = cache.cards[i]
         c.action = d.action
@@ -747,8 +749,9 @@ redraw = function()
       if sortCol then sortEntries(list) end
       local priced = 0
       for _, d in ipairs(rows) do if d.missing == 0 then priced = priced + 1 end end
-      frame.info:SetText(("%s %d/%d  -  %d recipes, %d priced, %d shown"):format(
-        profName, prof.skill, prof.max, #prof.recipes, priced, #list))
+      frame.info:SetText(("%s %d/%d  -  %d recipes, %d priced, %d shown%s"):format(
+        profName, prof.skill, prof.max, #prof.recipes, priced, #list,
+        tab == "level" and ("  |cff909090%s odds|r"):format(ns.Opt("odds") == "typical" and "typical" or "worst-case") or ""))
     end
   else
     frame.info:SetText("Open a profession window once to scan it.")

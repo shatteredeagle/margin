@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Planning now uses worst-case skill-up odds by default: yellow recipes count as 25%, green as 5%, and colours are assumed to fade sooner, so the craft counts and shopping list do not come up short on bad luck. `/margin odds typical` switches back to the usual 75% / 25%.
+
 - Route: your skill is followed as you level, even with the profession window closed.
 - Route: completed steps are remembered (the recipe that raised your skill, the crafts, the cost and the date) under a "Completed steps" row.
 - Route: locked. The recipes it chose stay put while prices change, until you press Re-plan (or change a setting that changes the route). `/margin lock` turns locking off.

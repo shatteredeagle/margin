@@ -12,7 +12,7 @@ Updates are new releases. Type `/margin` in game, or use the Margin button on a 
 ## What it does
 
 - **Profit tab:** every recipe you know, priced from the cheapest source for each reagent (vendor, auction house, or crafting it yourself), against what the result sells for.
-- **Leveling tab:** cost per expected skill-up, net of what the crafts sell for.
+- **Leveling tab:** cost per expected skill-up, net of what the crafts sell for. Planned with worst-case skill-up odds by default, so you do not run short of materials.
 - **Route tab:** the cheapest path from your skill to your target, with a shopping list and cards that compare the route under each pricing option. It can include recipes you have not learned yet (trainer recipes and patterns you can buy).
 - **At the auction house:** a shopping list with one-click Search that fills in the quantity, an "unpriced" button that looks up only the items Margin needs, and purchases ticked off as the AH confirms them.
 - **At a vendor:** buy everything the route still needs (never more than needed), and sell the route's crafted items.
@@ -28,6 +28,7 @@ Updates are new releases. Type `/margin` in game, or use the Margin button on a 
 | `/margin cut 5` | AH cut in percent |
 | `/margin chance 80` | how often an AH listing sells (the deposit is lost when it does not) |
 | `/margin buy`, `/margin list` | toggle the vendor popup / the AH shopping list |
+| `/margin odds worst` | skill-up odds used for planning: `worst` (default) or `typical` |
 | `/margin lock` | toggle keeping the route fixed until you press Re-plan |
 | `/margin coverage` | which professions have trainer data |
 | `/margin debug` | print what Margin is doing |
