@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.0-alpha
 
 - Margin remembers the profession you last had open (or picked in Margin) and opens on it next time, per character.
 

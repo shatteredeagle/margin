@@ -1,0 +1,739 @@
+<title>Margin UI Redesign</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Marcellus&family=Alegreya+Sans:wght@400;500;700&display=swap">
+<style>
+/* Layout: a design-review page. Sticky header with the direction switcher; each direction is a stack of
+   "stages" (framed renders of the in-game windows, drawn at game pixel size and scaled to fit), with the
+   rationale and token panel first. The WoW frames themselves are always dark: that is the game. */
+:root{
+  --bg:#ebe8e1; --fg:#201c16; --muted:#6b6457; --line:#d3ccbd; --card:#f6f4ee; --card2:#ece8de;
+  --accent:#8a6a1f; --accent-ink:#fff; --ok:#1f8a3c; --bad:#b4342a;
+  --font-ui:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --font-wow:"Alegreya Sans","Trebuchet MS","Gill Sans",sans-serif;
+  --font-wow-title:"Marcellus","Palatino Linotype",Palatino,"Book Antiqua",serif;
+  /* WoW shared semantic colours (identical in every direction; they come from the addon's conventions) */
+  --diff-orange:#ff8040; --diff-yellow:#ffe84a; --diff-green:#4fd04f; --diff-grey:#909090;
+  --unlearned:#80c0ff; --make:#9fb4ff; --gold:#ffd700; --silver:#c8c8c8; --copper:#eda55f;
+  --profit:#6ee86e; --loss:#ff6b6b; --warn:#ffd070;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){ --bg:#131215; --fg:#e9e4d8; --muted:#9b947f; --line:#2c2a2e; --card:#1b1a1e; --card2:#232127; --accent:#d9b24c; --accent-ink:#1a1407; --ok:#5fd37a; --bad:#ff7a70; color-scheme:dark }
+}
+:root[data-theme="dark"]{ --bg:#131215; --fg:#e9e4d8; --muted:#9b947f; --line:#2c2a2e; --card:#1b1a1e; --card2:#232127; --accent:#d9b24c; --accent-ink:#1a1407; --ok:#5fd37a; --bad:#ff7a70; color-scheme:dark }
+
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 var(--font-ui);padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 48px}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+a{color:var(--accent)}
+h1,h2,h3{text-wrap:balance;margin:0;line-height:1.2}
+h1{font:600 22px/1.2 var(--font-ui)}
+h2{font:600 19px/1.25 var(--font-ui);margin-top:8px}
+h3{font:600 14px/1.3 var(--font-ui);letter-spacing:.02em;text-transform:uppercase;color:var(--muted)}
+p{margin:0}
+.wrap{max-width:1180px;margin:0 auto}
+
+/* page header */
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);border-bottom:1px solid var(--line);padding:10px 0;display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center}
+.top .brand{display:flex;align-items:center;gap:10px}
+.top .brand svg{width:28px;height:28px}
+.top .sub{color:var(--muted);font-size:13px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden;background:var(--card)}
+.seg button{appearance:none;border:0;background:transparent;color:var(--fg);font:500 14px var(--font-ui);padding:7px 14px;cursor:pointer;border-right:1px solid var(--line)}
+.seg button:last-child{border-right:0}
+.seg button.on{background:var(--accent);color:var(--accent-ink)}
+.seg button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.seg small{opacity:.75;font-weight:400;margin-left:6px}
+
+/* direction intro */
+.dir{display:none}
+.dir.on{display:block}
+.intro{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:20px 28px;padding:22px 0 8px}
+.intro .text{max-width:62ch}
+.intro .text p{margin-top:8px}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;margin-top:12px;font-size:14px}
+.kv dt{color:var(--muted)}
+.kv dd{margin:0}
+.tokens{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:14px 16px}
+.tokens h3{margin-bottom:10px}
+.tokgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px 14px;font-size:13px}
+.tok{display:flex;align-items:center;gap:8px;min-width:0}
+.tok i{width:22px;height:22px;border-radius:4px;border:1px solid rgba(0,0,0,.35);flex:none}
+.tok b{font-weight:500}
+.tok code{color:var(--muted);font-size:12px}
+.tokens .typ{margin-top:12px;font-size:13px;color:var(--muted);line-height:1.5}
+
+/* stages */
+.stage{margin-top:26px}
+.stage>header{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 14px;margin-bottom:10px}
+.stage>header p{color:var(--muted);font-size:14px;max-width:80ch}
+.stagebody{overflow-x:auto;padding-bottom:6px}
+.frames{display:flex;flex-wrap:wrap;gap:22px;align-items:flex-start}
+.frame{position:relative;flex:none}
+.frame>.wow{transform-origin:0 0}
+.frame .cap{position:absolute;left:0;top:100%;margin-top:6px;font-size:12px;color:var(--muted);white-space:nowrap}
+.frames>.frame{margin-bottom:28px}
+.note{background:var(--card2);border-left:3px solid var(--accent);padding:10px 14px;border-radius:0 6px 6px 0;font-size:14px;margin-top:10px;max-width:90ch}
+.note b{font-weight:600}
+.fixes{margin:8px 0 0;padding-left:18px;font-size:14px;max-width:90ch}
+.fixes li{margin:3px 0}
+.tag{display:inline-block;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;padding:1px 6px;border-radius:3px;background:var(--accent);color:var(--accent-ink);vertical-align:middle}
+.tag.prop{background:transparent;color:var(--accent);border:1px solid var(--accent)}
+
+/* legend */
+.legend{margin-top:34px;padding-top:18px;border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px 28px;font-size:14px}
+.legend ul{margin:6px 0 0;padding:0;list-style:none}
+.legend li{display:flex;align-items:center;gap:8px;margin:4px 0}
+.legend li i{width:14px;height:14px;border-radius:3px;border:1px solid rgba(0,0,0,.3);flex:none}
+
+/* ---------- WoW renders (always dark; tokens set per direction on .dir) ---------- */
+.wow{font:13px/1.25 var(--font-wow);color:var(--w-text);background:var(--w-bg);border:1px solid var(--w-border);box-shadow:inset 0 0 0 1px #000,0 10px 30px rgba(0,0,0,.45);position:relative;color-scheme:dark;overflow:hidden;display:flex;flex-direction:column}
+.wow *{box-sizing:border-box}
+.wow .titlebar{height:26px;flex:none;display:flex;align-items:center;gap:8px;padding:0 8px 0 10px;background:linear-gradient(var(--w-panel2),var(--w-panel));border-bottom:1px solid var(--w-border);font:15px var(--font-wow-title);color:var(--w-accent);letter-spacing:.02em}
+.wow .titlebar .logo{width:16px;height:16px;color:var(--w-accent)}
+.wow .titlebar .spacer{flex:1}
+.wow .titlebar .x{width:18px;height:18px;border:1px solid var(--w-border);background:var(--w-panel2);color:var(--w-dim);display:grid;place-items:center;font:12px var(--font-ui)}
+.wow .spacer{flex:1}
+:is(.wow,.gamefr) .dim{color:var(--w-dim)}
+.wow .warn{color:var(--warn)}
+:is(.wow,.gamefr) .pos{color:var(--profit);font-weight:700}
+:is(.wow,.gamefr) .neg{color:var(--loss);font-weight:700}
+:is(.wow,.gamefr) .money{font-variant-numeric:tabular-nums;white-space:nowrap}
+:is(.wow,.gamefr) .money i{font-style:normal;font-size:.85em;margin-left:1px}
+:is(.wow,.gamefr) .cg{color:var(--gold)} :is(.wow,.gamefr) .cs{color:var(--silver)} :is(.wow,.gamefr) .cc{color:var(--copper)}
+.wow .num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+:is(.wow,.gamefr) .ic{width:16px;height:16px;flex:none;display:inline-block;vertical-align:-3px}
+:is(.wow,.gamefr) .ico{width:18px;height:18px;flex:none;display:inline-grid;place-items:center;background:#241e19;border:1px solid #000;box-shadow:inset 0 0 0 1px #3d332a}
+:is(.wow,.gamefr) .ico svg{width:16px;height:16px}
+:is(.wow,.gamefr) .ico.lg{width:28px;height:28px}:is(.wow,.gamefr) .ico.lg svg{width:24px;height:24px}
+:is(.wow,.gamefr) .ico.xl{width:36px;height:36px}:is(.wow,.gamefr) .ico.xl svg{width:30px;height:30px}
+.wow .d0{color:var(--diff-orange)} .wow .d1{color:var(--diff-yellow)} .wow .d2{color:var(--diff-green)} .wow .d3{color:var(--diff-grey)} .wow .dU{color:var(--unlearned)}
+.wow .mk{color:var(--make)}
+.wow .btn{appearance:none;font:13px var(--font-wow);color:var(--w-text);background:linear-gradient(var(--w-panel2),var(--w-panel));border:1px solid var(--w-border);padding:0 10px;height:22px;cursor:pointer;white-space:nowrap;display:inline-flex;align-items:center;gap:6px;box-shadow:inset 0 1px 0 rgba(255,255,255,.05)}
+.wow .btn:hover{border-color:var(--w-accent);color:#fff}
+.wow .btn.pri{border-color:var(--w-accent);color:var(--w-accent)}
+.wow .btn.armed{background:#5a2a1f;border-color:var(--loss);color:#fff}
+.wow .btn:disabled{opacity:.45;cursor:default}
+.wow .btn.sm{height:18px;padding:0 7px;font-size:12px}
+.wow .iconbtn{width:22px;height:22px;padding:0;justify-content:center}
+.wow .iconbtn svg{width:14px;height:14px}
+.wow .chip{appearance:none;font:12px var(--font-wow);color:var(--w-text);background:var(--w-panel2);border:1px solid var(--w-border);border-radius:11px;height:20px;padding:0 9px 0 8px;cursor:pointer;display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
+.wow .chip .k{color:var(--w-dim)}
+.wow .chip svg{width:10px;height:10px;color:var(--w-dim)}
+.wow .chip:hover{border-color:var(--w-accent)}
+.wow .chip.on{border-color:var(--w-accent);color:var(--w-accent)}
+.wow .skill{display:flex;align-items:center;gap:8px;min-width:0}
+.wow .bar{position:relative;width:140px;height:9px;background:#000;border:1px solid var(--w-border)}
+.wow .bar i{position:absolute;inset:0;background:linear-gradient(var(--w-accent),color-mix(in srgb,var(--w-accent) 70%,#000))}
+.wow .bar.thin{height:5px}
+.wow .skill b{font:600 12px var(--font-wow);font-variant-numeric:tabular-nums;white-space:nowrap}
+.wow .search{display:inline-flex;align-items:center;gap:6px;height:22px;border:1px solid var(--w-border);background:#000;padding:0 8px;color:var(--w-dim);min-width:0}
+.wow .search input{appearance:none;background:transparent;border:0;color:var(--w-text);font:13px var(--font-wow);width:150px;outline:0;min-width:0}
+.wow .search input::placeholder{color:var(--w-dim)}
+.wow .search svg{width:12px;height:12px}
+.wow .tab{appearance:none;background:transparent;border:0;border-bottom:2px solid transparent;color:var(--w-dim);font:14px var(--font-wow-title);padding:4px 12px 5px;cursor:pointer;letter-spacing:.02em}
+.wow .tab:hover{color:var(--w-text)}
+.wow .tab.on{color:var(--w-accent);border-bottom-color:var(--w-accent)}
+.wow .sec{display:flex;align-items:center;gap:8px;height:22px;padding:0 8px;background:var(--w-panel2);border-top:1px solid var(--w-border);border-bottom:1px solid var(--w-border);color:var(--w-accent);font:600 12px var(--font-wow);letter-spacing:.03em;text-transform:uppercase}
+.wow .sec .dim{text-transform:none;font-weight:400;letter-spacing:0}
+.wow .sec .num{margin-left:auto;color:var(--w-text);text-transform:none;letter-spacing:0;font-weight:400}
+.wow .sec button{margin-left:0}
+.wow .hdrrow{display:grid;align-items:center;height:18px;padding:0 8px;color:var(--w-dim);font:600 11px var(--font-wow);letter-spacing:.04em;text-transform:uppercase;border-bottom:1px solid var(--w-border)}
+.wow .hdrrow .c{cursor:pointer;user-select:none}
+.wow .hdrrow .c:hover{color:var(--w-text)}
+.wow .hdrrow .c.on{color:var(--w-accent)}
+.wow .hdrrow .c.num{text-align:right}
+.wow .list{overflow-y:auto;overflow-x:hidden;min-height:0;scrollbar-width:thin;scrollbar-color:var(--w-border) transparent}
+.wow .row{display:grid;align-items:center;height:22px;padding:0 8px;gap:0 8px;border-bottom:1px solid rgba(255,255,255,.035);cursor:pointer;white-space:nowrap}
+.wow .row:hover{background:color-mix(in srgb,var(--w-accent) 12%,transparent)}
+.wow .row.sel{background:color-mix(in srgb,var(--w-accent) 18%,transparent);box-shadow:inset 2px 0 0 var(--w-accent)}
+.wow .row .c{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.wow .row .name{display:flex;align-items:center;gap:6px}
+.wow .row .name small{color:var(--unlearned);font-size:11px}
+.wow .row.prep{height:20px}
+.wow .row.prep .c.name{padding-left:18px;position:relative}
+.wow .row.prep .c.name::before{content:"";position:absolute;left:6px;top:-10px;bottom:50%;width:8px;border-left:1px solid var(--w-border);border-bottom:1px solid var(--w-border)}
+.wow .row.gap{color:var(--loss)}
+.wow .row.hist{color:var(--w-dim)}
+.wow .pill{display:inline-flex;align-items:center;gap:3px;font:600 10px var(--font-wow);letter-spacing:.04em;text-transform:uppercase;padding:1px 5px;border-radius:3px;line-height:1.3}
+.wow .pill.learn{background:#1d3550;color:var(--unlearned)}
+.wow .pill.make{background:#22283f;color:var(--make)}
+.wow .pill.have{background:#1b3a22;color:var(--profit)}
+.wow .pill.ah{background:#3a2d12;color:var(--warn)}
+.wow .pill.vend{background:#1d3550;color:var(--unlearned)}
+.wow .pill.done{background:#1b3a22;color:var(--profit)}
+.wow .pill.svg svg{width:9px;height:9px}
+.wow .pill svg{width:9px;height:9px}
+.wow .range{color:var(--w-dim);font-variant-numeric:tabular-nums}
+.wow .range b{color:var(--w-text);font-weight:600}
+.wow .foot{flex:none;display:flex;align-items:center;gap:8px;padding:6px 10px;border-top:1px solid var(--w-border);background:var(--w-panel);font-size:12px;color:var(--w-dim)}
+.wow .banner{display:flex;align-items:center;gap:8px;padding:4px 10px;font-size:12px;background:#3a2d12;color:var(--warn);border-bottom:1px solid var(--w-border)}
+.wow .banner.err{background:#4a1f1b;color:#ffb0a8}
+.wow .banner svg{width:12px;height:12px;flex:none}
+.wow .banner .spacer{flex:1}
+.wow .banner .btn{height:18px;font-size:12px;padding:0 7px}
+.wow .cards{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding:8px 10px;flex:none}
+.wow .card{background:var(--w-panel2);border:1px solid var(--w-border);padding:5px 8px 5px;height:56px;cursor:pointer;display:grid;grid-template-rows:auto 1fr;gap:2px;position:relative;text-align:left}
+.wow .card:hover{border-color:var(--w-accent)}
+.wow .card.on{border-color:var(--w-accent);box-shadow:inset 0 0 0 1px var(--w-accent)}
+.wow .card .lbl{display:flex;justify-content:space-between;font-size:11px;color:var(--w-dim)}
+.wow .card .lbl .delta{font-weight:700;font-variant-numeric:tabular-nums}
+.wow .card .lbl .sel{color:var(--w-accent);font-weight:700}
+.wow .card .val{display:flex;justify-content:space-between;align-items:baseline;font-size:15px}
+.wow .card .val .sub{font-size:11px;color:var(--w-dim)}
+.tip{font:13px/1.25 var(--font-wow);color:var(--w-text);position:absolute;z-index:3;width:250px;background:rgba(8,8,12,.96);border:1px solid var(--w-border);padding:7px 9px;font-size:12px;pointer-events:none;box-shadow:0 6px 20px rgba(0,0,0,.6)}
+.tip h4{margin:0 0 4px;font:600 13px var(--font-wow);color:#fff}
+.tip .ln{display:flex;justify-content:space-between;gap:10px;color:#fff}
+.tip .ln .dim{color:var(--w-dim)}
+.tip .hint{margin-top:5px;color:#9adcff}
+.tip .mute{color:var(--w-dim)}
+.tip.static{position:static;pointer-events:auto;display:block}
+.wow .empty{flex:1;display:grid;place-items:center;text-align:center;padding:20px}
+.wow .empty .hero{width:48px;height:48px;color:var(--w-border);margin-bottom:8px}
+.wow .empty h4{margin:0 0 4px;font:16px var(--font-wow-title);color:var(--w-text)}
+.wow .empty p{color:var(--w-dim);max-width:34ch;margin:0 auto 10px;font-size:12px}
+.wow .check{display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-size:12px}
+.wow .check i{width:13px;height:13px;border:1px solid var(--w-border);background:#000;display:inline-grid;place-items:center;color:var(--w-accent)}
+.wow .check i svg{width:9px;height:9px}
+.wow .segc{display:inline-flex;border:1px solid var(--w-border);background:#000}
+.wow .segc button{appearance:none;border:0;border-right:1px solid var(--w-border);background:transparent;color:var(--w-dim);font:12px var(--font-wow);height:20px;padding:0 9px;cursor:pointer}
+.wow .segc button:last-child{border-right:0}
+.wow .segc button.on{background:var(--w-panel2);color:var(--w-accent)}
+.wow .settings{position:absolute;inset:26px 0 0 0;background:var(--w-bg);z-index:4;display:flex;flex-direction:column}
+.wow .settings .shead{display:flex;align-items:center;gap:8px;padding:6px 10px;border-bottom:1px solid var(--w-border);font:15px var(--font-wow-title);color:var(--w-accent)}
+.wow .sgrid{display:grid;grid-template-columns:1fr 1fr;gap:0 18px;padding:6px 12px;overflow:auto}
+.wow .sgroup h5{margin:8px 0 4px;font:600 11px var(--font-wow);letter-spacing:.04em;text-transform:uppercase;color:var(--w-dim)}
+.wow .srow{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:26px;font-size:12px}
+.wow .srow .lab{display:flex;flex-direction:column;min-width:0}
+.wow .srow .lab small{color:var(--w-dim);font-size:11px;white-space:normal;line-height:1.3}
+.wow .sinput{width:46px;height:20px;background:#000;border:1px solid var(--w-border);color:var(--w-text);font:12px var(--font-wow);text-align:right;padding:0 6px}
+.wow.strip{flex-direction:row;display:flex;align-items:center;gap:0;background:var(--w-panel);border:1px solid var(--w-border);height:26px;padding:0 0 0 8px}
+.wow .strip .brand{display:flex;align-items:center;gap:5px;color:var(--w-accent);font:13px var(--font-wow-title);padding-right:10px;border-right:1px solid var(--w-border);height:100%}
+.wow .strip .brand svg{width:13px;height:13px}
+.wow .strip .btn{height:100%;border:0;border-right:1px solid var(--w-border);background:transparent;box-shadow:none;border-radius:0}
+.wow .strip .btn:last-child{border-right:0}
+.wow .strip .btn.run{color:var(--warn)}
+.wow .strip .count{display:inline-grid;place-items:center;min-width:18px;height:16px;padding:0 5px;border-radius:8px;background:var(--w-panel2);border:1px solid var(--w-border);font:600 11px var(--font-wow);color:var(--w-accent)}
+.wow .strip .count.hot{background:#3a2d12;color:var(--warn);border-color:#6b5420}
+.wow .pulse{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--warn);animation:pulse 1s infinite}
+@keyframes pulse{50%{opacity:.25}}
+@media (prefers-reduced-motion: reduce){.wow .pulse{animation:none}}
+.wow .srow2{display:grid;grid-template-columns:28px 1fr auto;gap:8px;align-items:center;padding:4px 8px;border-bottom:1px solid rgba(255,255,255,.035);min-height:38px}
+.wow .srow2 .t{min-width:0;display:flex;flex-direction:column;gap:2px}
+.wow .srow2 .t .n{display:flex;align-items:center;gap:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wow .srow2 .t .s{font-size:11px;color:var(--w-dim);display:flex;align-items:center;gap:6px;white-space:nowrap}
+.wow .srow2 .have{display:inline-flex;align-items:center;gap:5px}
+.wow .srow2 .have .bar{width:56px;height:5px}
+.wow .srow2.done .n{color:#8fd69a}
+.wow .srow2.mute .n{color:var(--w-dim)}
+.wow .tiny{font-size:11px}
+/* fake game frames behind companions */
+.gamefr{background:#1b1510;border:2px solid #5a4a30;box-shadow:inset 0 0 0 1px #2a2218;color:#c8b98f;font:13px var(--font-wow-title);position:relative}
+.gamefr .gt{height:24px;display:flex;align-items:center;justify-content:center;background:#2a2218;border-bottom:1px solid #5a4a30;color:#e6c25a}
+.gamefr .gin{padding:8px;display:grid;gap:4px}
+.gamefr .gin i{display:block;height:14px;background:#2a2218;border:1px solid #3a2f20}
+.gamefr .gclose{position:absolute;right:4px;top:3px;width:18px;height:18px;border:1px solid #5a4a30;background:#2a2218;color:#c8b98f;display:grid;place-items:center;font:12px var(--font-ui)}
+.gamefr .gbtn{display:inline-flex;align-items:center;justify-content:center;height:20px;padding:0 8px;background:#2a2218;border:1px solid #5a4a30;color:#c8b98f;font:12px var(--font-wow)}
+.gamefr .gbtn.m{border-color:var(--w-accent);color:var(--w-accent);gap:5px}
+.gamefr .gbtn.m svg{width:12px;height:12px}
+.gamefr .recipe{display:grid;grid-template-columns:36px 1fr;gap:8px;align-items:center;padding:6px 8px;border:1px solid #3a2f20;background:#120e0a;margin:4px 8px}
+.gamefr .recipe .ico{width:36px;height:36px}
+.gamefr .recipe .ico svg{width:30px;height:30px}
+.gamefr .recipe .rn{color:#fff;font:14px var(--font-wow)}
+.gamefr .recipe .ms{font:12px var(--font-wow);color:var(--w-dim);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.gamefr .recipe .ms b{color:var(--w-accent);font-weight:600}
+
+/* Direction B workbench specifics */
+.wow .wb{display:grid;grid-template-columns:1fr 320px;flex:1;min-height:0}
+.wow .wb>.left{display:flex;flex-direction:column;min-width:0;border-right:1px solid var(--w-border)}
+.wow .wb>.right{display:flex;flex-direction:column;min-width:0;background:var(--w-panel)}
+.wow .detail{padding:8px 10px;border-bottom:1px solid var(--w-border)}
+.wow .detail .dh{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.wow .detail .dh .nm{font:15px var(--font-wow-title);color:#fff;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wow .detail .dh .sub{font-size:11px;color:var(--w-dim)}
+.wow .kvl{display:grid;grid-template-columns:1fr auto;gap:2px 10px;font-size:12px}
+.wow .kvl .k{color:var(--w-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wow .kvl .v{text-align:right;white-space:nowrap}
+.wow .kvl .tot{border-top:1px solid var(--w-border);padding-top:3px;margin-top:2px}
+.wow .dactions{display:flex;gap:6px;margin-top:8px}
+.wow .cmpstrip{display:flex;border-bottom:1px solid var(--w-border);flex:none;background:var(--w-panel)}
+.wow .cmpstrip button{appearance:none;flex:1;border:0;border-right:1px solid var(--w-border);background:transparent;color:var(--w-text);font:12px var(--font-wow);height:36px;padding:0 10px;cursor:pointer;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:1px;text-align:left}
+.wow .cmpstrip button:last-child{border-right:0}
+.wow .cmpstrip button .l{color:var(--w-dim);font-size:11px;display:flex;gap:6px;width:100%}
+.wow .cmpstrip button .l span:first-child{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wow .cmpstrip button .l .delta{margin-left:auto;font-weight:700}
+.wow .cmpstrip button.on{background:var(--w-bg);box-shadow:inset 0 -2px 0 var(--w-accent)}
+.wow .cmpstrip button.on .l{color:var(--w-accent)}
+.wow .step{display:grid;grid-template-columns:54px 1fr;border-bottom:1px solid var(--w-border);cursor:pointer}
+.wow .step .sk{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;background:var(--w-panel);border-right:1px solid var(--w-border);font-variant-numeric:tabular-nums;font-size:12px;color:var(--w-dim)}
+.wow .step .sk b{color:var(--w-text);font-size:13px;font-weight:600}
+.wow .step .sk .n{width:16px;height:16px;border-radius:50%;background:var(--w-panel2);border:1px solid var(--w-border);display:grid;place-items:center;font:600 10px var(--font-wow);color:var(--w-accent)}
+.wow .step .sb{min-width:0}
+.wow .step .main{display:grid;grid-template-columns:18px 1fr auto auto;gap:8px;align-items:center;padding:5px 8px;min-height:30px}
+.wow .step .main .nm{display:flex;align-items:center;gap:6px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px}
+.wow .step .main .nm .pill{font-size:9px}
+.wow .step .sub{display:grid;grid-template-columns:18px 1fr auto auto;gap:8px;align-items:center;padding:0 8px 4px 22px;font-size:12px;color:var(--w-dim);white-space:nowrap}
+.wow .step .sub .ico{width:14px;height:14px}.wow .step .sub .ico svg{width:12px;height:12px}
+.wow .step.on{background:color-mix(in srgb,var(--w-accent) 10%,transparent)}
+.wow .step.on .sk{background:color-mix(in srgb,var(--w-accent) 18%,var(--w-panel))}
+.wow .step .main .num,.wow .step .sub .num{font-size:12px}
+.wow .step .main .num.big{font-size:13px}
+
+/* Direction C tracker specifics */
+.wow .trk{display:flex;flex-direction:column;flex:1;min-height:0}
+.wow .now{padding:8px 10px;border-bottom:1px solid var(--w-border);background:var(--w-panel)}
+.wow .now .lab{display:flex;align-items:center;justify-content:space-between;font:600 10px var(--font-wow);letter-spacing:.06em;text-transform:uppercase;color:var(--w-accent);margin-bottom:5px}
+.wow .now .big{display:grid;grid-template-columns:28px 1fr;gap:8px;align-items:center}
+.wow .now .big .nm{font:15px var(--font-wow-title);color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wow .now .big .meta{font-size:12px;color:var(--w-dim);display:flex;gap:8px;white-space:nowrap}
+.wow .now .checks{margin-top:6px;display:grid;gap:3px}
+.wow .ck{display:grid;grid-template-columns:14px 1fr auto;gap:7px;align-items:center;font-size:12px;cursor:pointer;min-height:18px}
+.wow .ck i{width:13px;height:13px;border:1px solid var(--w-border);background:#000;display:grid;place-items:center;color:var(--profit)}
+.wow .ck i svg{width:9px;height:9px}
+.wow .ck.done{color:var(--w-dim);text-decoration:line-through}
+.wow .ck .r{color:var(--w-dim);font-variant-numeric:tabular-nums}
+.wow .ck .t{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:flex;align-items:center;gap:5px}
+.wow .nowactions{display:flex;gap:6px;margin-top:8px}
+.wow .nowactions .btn{flex:1;justify-content:center}
+.wow .next .row{height:24px}
+.wow .cmpline{display:flex;align-items:center;gap:8px;padding:5px 10px;border-bottom:1px solid var(--w-border);font-size:12px;cursor:pointer;position:relative}
+.wow .cmpline .k{color:var(--w-dim)}
+.wow .cmpline svg{width:10px;height:10px;color:var(--w-dim)}
+.wow .cmppop{position:absolute;left:8px;right:8px;top:100%;z-index:3;background:rgba(10,10,14,.98);border:1px solid var(--w-border);padding:4px 0;box-shadow:0 8px 20px rgba(0,0,0,.6)}
+.wow .cmppop .o{display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center;padding:3px 10px;font-size:12px;cursor:pointer}
+.wow .cmppop .o:hover{background:color-mix(in srgb,var(--w-accent) 14%,transparent)}
+.wow .cmppop .o.on{color:var(--w-accent)}
+.wow .cmppop .o .d{font-weight:700;min-width:60px;text-align:right}
+.wow .crow{display:grid;grid-template-columns:18px 1fr auto;gap:8px;align-items:center;height:34px;padding:0 10px;border-bottom:1px solid rgba(255,255,255,.035);cursor:pointer}
+.wow .crow .t{min-width:0;display:flex;flex-direction:column}
+.wow .crow .t .n{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:13px}
+.wow .crow .t .s{font-size:11px;color:var(--w-dim);white-space:nowrap}
+.wow .crow:hover{background:color-mix(in srgb,var(--w-accent) 12%,transparent)}
+
+/* responsive */
+@media (max-width:860px){
+  .intro{grid-template-columns:1fr}
+  .top{position:static}
+}
+.sr{position:absolute;left:-9999px}
+</style>
+
+<header class="top wrap">
+  <div class="brand">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-logo"/></svg>
+    <div><h1>Margin UI Redesign</h1><div class="sub">Three directions for the WoW Forever tradeskill addon. Same data, same features, three layouts. Click things: tabs, sort headers, cards, Sure?, the unpriced lookup.</div></div>
+  </div>
+  <nav class="seg" aria-label="Direction" id="dirseg">
+    <button data-act="dir" data-v="a" class="on">A<small>Ledger</small></button>
+    <button data-act="dir" data-v="b">B<small>Workbench</small></button>
+    <button data-act="dir" data-v="c">C<small>Tracker</small></button>
+  </nav>
+</header>
+
+<main class="wrap" id="main"></main>
+
+<section class="wrap legend" id="legend">
+  <div><h3>Sign convention</h3>
+    <ul>
+      <li><i style="background:var(--profit)"></i><span><b>Green +</b> you earn (profit, a card that is better for you)</span></li>
+      <li><i style="background:var(--loss)"></i><span><b>Red -</b> you lose (route net, a worse card)</span></li>
+      <li><i style="background:var(--silver)"></i><span>Plain costs stay unsigned (Cost column, shopping list, fees)</span></li>
+    </ul></div>
+  <div><h3>Recipe colours (the game's)</h3>
+    <ul>
+      <li><i style="background:var(--diff-orange)"></i>Orange: skill-up every craft</li>
+      <li><i style="background:var(--diff-yellow)"></i>Yellow: worst case 25%, typical 75%</li>
+      <li><i style="background:var(--diff-green)"></i>Green: worst case 5%, typical 25%</li>
+      <li><i style="background:var(--diff-grey)"></i>Grey: no skill-up</li>
+      <li><i style="background:var(--unlearned)"></i>Blue: not learned yet (says where to learn it)</li>
+      <li><i style="background:var(--make)"></i>Make: intermediate crafted first</li>
+    </ul></div>
+  <div><h3>Money</h3>
+    <ul>
+      <li><i style="background:var(--gold)"></i>g gold</li>
+      <li><i style="background:var(--silver)"></i>s silver</li>
+      <li><i style="background:var(--copper)"></i>c copper</li>
+    </ul>
+    <p style="color:var(--muted);margin-top:8px">Sample data is a Leatherworker at 160/225 with a locked route to 225. Prices are plausible, not live. Anything the addon does not do today carries a <span class="tag prop">proposed</span> tag.</p></div>
+</section>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <!-- Logo: an M whose right leg is a rising margin line -->
+    <symbol id="i-logo" viewBox="0 0 24 24"><path d="M3 20V5l6 8 6-8v8" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/><path d="M15 20l6-9" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><path d="M17.5 11H21v3.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <!-- UI glyphs (stroke = currentColor) -->
+    <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M15 15l5.5 5.5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></symbol>
+    <symbol id="i-chev" viewBox="0 0 24 24"><path d="M5 9l7 7 7-7" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-chevr" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="10" rx="1.5" fill="currentColor"/><path d="M8 10V7a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="2.2"/></symbol>
+    <symbol id="i-unlock" viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="10" rx="1.5" fill="currentColor"/><path d="M8 10V7a4 4 0 0 1 7.5-1.8" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></symbol>
+    <symbol id="i-cart" viewBox="0 0 24 24"><path d="M3 4h2.5l2.2 10h10.1L20 7H7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/><circle cx="9" cy="19" r="1.8" fill="currentColor"/><circle cx="17" cy="19" r="1.8" fill="currentColor"/></symbol>
+    <symbol id="i-hammer" viewBox="0 0 24 24"><path d="M4 20l8-8" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><path d="M10 5l3-2 7 7-2 3-3-1-4-4z" fill="currentColor"/></symbol>
+    <symbol id="i-book" viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h12v15H6a2 2 0 0 0-2 2z" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M4 20a2 2 0 0 1 2-2h12v3H6a2 2 0 0 1-2-1z" fill="currentColor"/><path d="M9 7h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-up" viewBox="0 0 24 24"><path d="M12 20V5M5 12l7-7 7 7" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-down" viewBox="0 0 24 24"><path d="M12 4v15M5 12l7 7 7-7" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-warn" viewBox="0 0 24 24"><path d="M12 3L2.5 20h19z" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/><path d="M12 9v5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><circle cx="12" cy="17" r="1.3" fill="currentColor"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></symbol>
+    <symbol id="i-coin" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" fill="currentColor" opacity=".25"/><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="4.5" fill="none" stroke="currentColor" stroke-width="1.6"/></symbol>
+    <symbol id="i-ask" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.8.4-1 1-1 1.8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="17" r="1.2" fill="currentColor"/></symbol>
+    <symbol id="i-pin" viewBox="0 0 24 24"><path d="M14 3l7 7-3 1-3 3 1 5-2 2-4-6-5 5-1-1 5-5-6-4 2-2 5 1 3-3z" fill="currentColor"/></symbol>
+    <symbol id="i-expand" viewBox="0 0 24 24"><path d="M4 10V4h6M20 14v6h-6M20 4l-7 7M4 20l7-7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-replan" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.3-5.7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><path d="M20 3v5h-5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <!-- Item icons: flat geometric stand-ins for Interface\Icons\* (the real addon uses the game's item icons) -->
+    <symbol id="i-leather" viewBox="0 0 24 24"><rect x="4" y="9" width="16" height="8" rx="1" fill="#9a6232"/><path d="M4 9h16l-2.5-3.5h-11z" fill="#b57a42"/><rect x="4" y="15" width="16" height="2.5" fill="#5e3a19"/></symbol>
+    <symbol id="i-leather2" viewBox="0 0 24 24"><rect x="4" y="9" width="16" height="8" rx="1" fill="#74451f"/><path d="M4 9h16l-2.5-3.5h-11z" fill="#8c562a"/><rect x="4" y="15" width="16" height="2.5" fill="#3f2410"/></symbol>
+    <symbol id="i-leather3" viewBox="0 0 24 24"><rect x="4" y="8" width="16" height="10" rx="1" fill="#4e2c13"/><path d="M4 8h16l-2.5-3.5h-11z" fill="#6a3e1c"/><path d="M6 13h12" stroke="#2b170a" stroke-width="1.5" stroke-dasharray="2 2"/></symbol>
+    <symbol id="i-hide" viewBox="0 0 24 24"><path d="M5 8c2-4 12-4 14 0 2 3 1 8-2 10-3 2-7 2-10 0C4 16 3 11 5 8z" fill="#c49a6c"/><path d="M9 10l2 3-1 3" fill="none" stroke="#8d6a45" stroke-width="1.4"/></symbol>
+    <symbol id="i-hide2" viewBox="0 0 24 24"><path d="M5 8c2-4 12-4 14 0 2 3 1 8-2 10-3 2-7 2-10 0C4 16 3 11 5 8z" fill="#9f7449"/><path d="M9 10l2 3-1 3" fill="none" stroke="#6b4a2c" stroke-width="1.4"/></symbol>
+    <symbol id="i-cured" viewBox="0 0 24 24"><path d="M5 8c2-4 12-4 14 0 2 3 1 8-2 10-3 2-7 2-10 0C4 16 3 11 5 8z" fill="#d6b58e"/><circle cx="9" cy="11" r="1" fill="#fff"/><circle cx="14" cy="10" r="1" fill="#fff"/><circle cx="12" cy="15" r="1" fill="#fff"/></symbol>
+    <symbol id="i-cured2" viewBox="0 0 24 24"><path d="M5 8c2-4 12-4 14 0 2 3 1 8-2 10-3 2-7 2-10 0C4 16 3 11 5 8z" fill="#b48a5e"/><circle cx="9" cy="11" r="1" fill="#fff"/><circle cx="14" cy="10" r="1" fill="#fff"/><circle cx="12" cy="15" r="1" fill="#fff"/></symbol>
+    <symbol id="i-salt" viewBox="0 0 24 24"><path d="M7 10h10l1.5 9h-13z" fill="#e5ebf0"/><path d="M9 10V7h6v3" fill="none" stroke="#b9c4ce" stroke-width="1.6"/><circle cx="10" cy="14" r=".9" fill="#9fb0bd"/><circle cx="14" cy="16" r=".9" fill="#9fb0bd"/></symbol>
+    <symbol id="i-thread" viewBox="0 0 24 24"><rect x="8" y="6" width="8" height="12" fill="#e8e0cc"/><path d="M8 9h8M8 12h8M8 15h8" stroke="#c7bca2" stroke-width="1"/><rect x="6" y="4" width="12" height="2.5" fill="#9a6232"/><rect x="6" y="17.5" width="12" height="2.5" fill="#9a6232"/></symbol>
+    <symbol id="i-thread2" viewBox="0 0 24 24"><rect x="8" y="6" width="8" height="12" fill="#d9c5ea"/><path d="M8 9h8M8 12h8M8 15h8" stroke="#b39ccb" stroke-width="1"/><rect x="6" y="4" width="12" height="2.5" fill="#9a6232"/><rect x="6" y="17.5" width="12" height="2.5" fill="#9a6232"/></symbol>
+    <symbol id="i-gloves" viewBox="0 0 24 24"><path d="M8 20v-8.5a1.2 1.2 0 0 1 2.4 0V8a1.2 1.2 0 0 1 2.4 0V7a1.2 1.2 0 0 1 2.4 0v1a1.2 1.2 0 0 1 2.4 0v4.2l1.3-1.6a1.1 1.1 0 0 1 1.8 1.2L18 16v4z" fill="#9a6232"/><path d="M8 17h10" stroke="#5e3a19" stroke-width="1.4"/></symbol>
+    <symbol id="i-shoulders" viewBox="0 0 24 24"><path d="M3 15c0-4.5 3.5-8 8-8h2c4.5 0 8 3.5 8 8v3h-6.5v-3.5h-5V18H3z" fill="#9a6232"/><path d="M5 14h4.5M14.5 14H19" stroke="#5e3a19" stroke-width="1.4"/></symbol>
+    <symbol id="i-cloak" viewBox="0 0 24 24"><path d="M12 4l6.5 3-1.5 13H7L5.5 7z" fill="#5a3a7a"/><path d="M12 4v16" stroke="#3b2552" stroke-width="1.2"/></symbol>
+    <symbol id="i-bracers" viewBox="0 0 24 24"><rect x="5" y="7" width="14" height="10" rx="2" fill="#74451f"/><path d="M5 10.5h14M5 13.5h14" stroke="#3f2410" stroke-width="1.4"/></symbol>
+    <symbol id="i-headband" viewBox="0 0 24 24"><path d="M4 13c0-5 4-8 8-8s8 3 8 8v3H4z" fill="#3b2d55"/><path d="M4 13.5h16" stroke="#c9a24a" stroke-width="2"/></symbol>
+    <symbol id="i-tunic" viewBox="0 0 24 24"><path d="M8 4h8l4 4-3 2v10H7V10L4 8z" fill="#3b2d55"/><path d="M12 10v10" stroke="#261c38" stroke-width="1.2"/></symbol>
+    <symbol id="i-pants" viewBox="0 0 24 24"><path d="M7 4h10l1 16h-5l-1-8-1 8H6z" fill="#74451f"/></symbol>
+    <symbol id="i-belt" viewBox="0 0 24 24"><rect x="3" y="9" width="18" height="6" rx="1" fill="#74451f"/><rect x="10" y="8" width="4" height="8" rx="1" fill="#c9a24a"/></symbol>
+    <symbol id="i-boots" viewBox="0 0 24 24"><path d="M8 4h6v9l5 3v4H6V4z" fill="#5e3a19"/><path d="M8 17h11" stroke="#3a2210" stroke-width="1.4"/></symbol>
+    <symbol id="i-cloth" viewBox="0 0 24 24"><rect x="5" y="7" width="14" height="10" rx="1" fill="#e2d7ef"/><path d="M5 10h14M5 13h14" stroke="#c4b4dd" stroke-width="1"/></symbol>
+    <symbol id="i-lw" viewBox="0 0 24 24"><path d="M5 9c2-4 12-4 14 0 2 3 1 8-2 10-3 2-7 2-10 0C4 17 3 12 5 9z" fill="#c49a6c"/><path d="M13 5l6 6" stroke="#e9eef2" stroke-width="2.4" stroke-linecap="round"/><path d="M11 7l2-2" stroke="#5e3a19" stroke-width="2.4" stroke-linecap="round"/></symbol>
+  </defs>
+</svg>
+
+<script>
+/* ---------------- shared data model (what the addon really exposes) ---------------- */
+const PROF = { name:'Leatherworking', skill:160, max:225, target:225, lockedOn:'Nov 12', others:['Leatherworking','Cooking','First Aid'] };
+const ODDS = { worst:{0:1,1:.25,2:.05,3:0}, typical:{0:1,1:.75,2:.25,3:0} };
+const ITEMS = {
+  'Medium Leather':{icon:'leather',unit:214,src:'AH'},
+  'Heavy Leather':{icon:'leather2',unit:480,src:'AH'},
+  'Thick Leather':{icon:'leather3',unit:920,src:'AH'},
+  'Medium Hide':{icon:'hide',unit:450,src:'AH'},
+  'Heavy Hide':{icon:'hide2',unit:950,src:'AH'},
+  'Salt':{icon:'salt',unit:500,src:'vendor'},
+  'Fine Thread':{icon:'thread',unit:100,src:'vendor'},
+  'Silken Thread':{icon:'thread2',unit:500,src:'vendor'},
+  'Bolt of Silk Cloth':{icon:'cloth',unit:null,src:null},
+  'Cured Medium Hide':{icon:'cured',unit:950,src:'craft',rx:[['Medium Hide',1],['Salt',1]]},
+  'Cured Heavy Hide':{icon:'cured2',unit:1450,src:'craft',rx:[['Heavy Hide',1],['Salt',1]]},
+};
+const HAVE = { 'Heavy Leather':12, 'Medium Leather':36, 'Salt':20, 'Fine Thread':34, 'Cured Heavy Hide':3, 'Medium Hide':12 };
+const RECIPES = [
+  {name:'Barbaric Shoulders',icon:'shoulders',rank:155,diff:0,vendor:2890,ah:11700,rx:[['Heavy Leather',8],['Cured Heavy Hide',1],['Fine Thread',2]],out:true},
+  {name:"Hillman's Leather Gloves",icon:'gloves',rank:145,diff:1,vendor:1460,ah:3720,rx:[['Medium Leather',4],['Cured Medium Hide',2],['Fine Thread',2]],out:true},
+  {name:"Hillman's Cloak",icon:'cloak',rank:150,diff:0,vendor:1710,ah:4260,rx:[['Medium Leather',10],['Cured Medium Hide',1],['Fine Thread',1]],out:true},
+  {name:"Hillman's Shoulders",icon:'shoulders',rank:150,diff:0,vendor:2040,ah:5280,rx:[['Medium Leather',8],['Cured Medium Hide',2],['Fine Thread',2]],out:true},
+  {name:'Guardian Pants',icon:'pants',rank:160,diff:0,vendor:3360,ah:8460,rx:[['Heavy Leather',10],['Cured Heavy Hide',2],['Silken Thread',1]],out:true},
+  {name:'Barbaric Gloves',icon:'gloves',rank:155,diff:0,vendor:2460,ah:7200,rx:[['Heavy Leather',6],['Bolt of Silk Cloth',2],['Fine Thread',2]],out:true},
+  {name:'Cured Heavy Hide',icon:'cured2',rank:150,diff:0,vendor:450,ah:1340,rx:[['Heavy Hide',1],['Salt',1]],out:true},
+  {name:'Heavy Leather',icon:'leather2',rank:150,diff:0,vendor:120,ah:270,rx:[['Medium Leather',5]],out:true},
+  {name:'Cured Medium Hide',icon:'cured',rank:125,diff:2,vendor:220,ah:1110,rx:[['Medium Hide',1],['Salt',1]],out:true},
+  {name:"Hillman's Belt",icon:'belt',rank:140,diff:2,vendor:1130,ah:1620,rx:[['Medium Leather',6],['Cured Medium Hide',1],['Fine Thread',1]],out:true},
+  {name:'Dark Leather Belt',icon:'belt',rank:110,diff:3,vendor:850,ah:1020,rx:[['Medium Leather',4],['Cured Medium Hide',1],['Fine Thread',1]],out:true},
+  {name:'Dark Leather Boots',icon:'boots',rank:120,diff:3,vendor:1080,ah:1260,rx:[['Medium Leather',6],['Cured Medium Hide',1],['Fine Thread',1]],out:true},
+  {name:'Toughened Leather Gloves',icon:'gloves',rank:125,diff:3,vendor:1260,ah:1560,rx:[['Medium Leather',4],['Cured Medium Hide',2],['Fine Thread',2]],out:true},
+  // unlearned (blue) rows: only in "Recipes: all"
+  {name:'Dusky Bracers',icon:'bracers',rank:165,diff:0,vendor:3720,ah:9120,rx:[['Heavy Leather',8],['Cured Heavy Hide',2],['Silken Thread',1]],out:true,learn:{how:'trainer',fee:12000}},
+  {name:'Guardian Cloak',icon:'cloak',rank:180,diff:0,vendor:4680,ah:8400,rx:[['Heavy Leather',10],['Cured Heavy Hide',2],['Silken Thread',1]],out:true,learn:{how:'trainer',fee:20000}},
+  {name:'Guardian Gloves',icon:'gloves',rank:190,diff:0,vendor:3060,ah:7680,rx:[['Heavy Leather',4],['Cured Heavy Hide',2],['Silken Thread',1]],out:true,learn:{how:'trainer',fee:22000}},
+  {name:'Nightscape Headband',icon:'headband',rank:205,diff:0,vendor:5520,ah:13200,rx:[['Thick Leather',5],['Silken Thread',2]],out:true,learn:{how:'trainer',fee:25000}},
+  {name:'Nightscape Tunic',icon:'tunic',rank:210,diff:0,vendor:6900,ah:18600,rx:[['Thick Leather',7],['Silken Thread',2]],out:true,learn:{how:'trainer',fee:30000}},
+  {name:'Barbaric Harness',icon:'tunic',rank:165,diff:0,vendor:4260,ah:9600,rx:[['Heavy Leather',12],['Cured Heavy Hide',2],['Silken Thread',1]],out:true,learn:{how:'ah',fee:14000,item:'Pattern: Barbaric Harness'}},
+];
+const R = Object.fromEntries(RECIPES.map(r=>[r.name,r]));
+// the locked route 160 -> 225 (with unlearned recipes) and the "learned only" alternative
+const ROUTE_TRAINER = [
+  {from:160,to:165,r:'Barbaric Shoulders',crafts:{worst:5,typical:5}},
+  {from:165,to:180,r:'Dusky Bracers',crafts:{worst:17,typical:15},learn:true},
+  {from:180,to:190,r:'Guardian Cloak',crafts:{worst:12,typical:10},learn:true},
+  {from:190,to:205,r:'Guardian Gloves',crafts:{worst:18,typical:15},learn:true},
+  {from:205,to:215,r:'Nightscape Headband',crafts:{worst:12,typical:10},learn:true},
+  {from:215,to:225,r:'Nightscape Tunic',crafts:{worst:15,typical:12},learn:true,diffAt:1},
+];
+const ROUTE_LEARNED = [
+  {from:160,to:175,r:'Barbaric Shoulders',crafts:{worst:22,typical:17}},
+  {from:175,to:190,r:'Guardian Pants',crafts:{worst:31,typical:22},diffAt:1},
+  {from:190,to:225,gap:true},
+];
+const HISTORY = [
+  {from:125,to:140,name:'Cured Medium Hide',icon:'cured',crafts:18,cost:17100,t:'Nov 09'},
+  {from:140,to:160,name:"Hillman's Belt",icon:'belt',crafts:26,cost:60700,t:'Nov 11'},
+];
+const TAB_NAME = {profit:'Profit',level:'Leveling',route:'Route'};
+
+/* ---------------- UI state (one model, three layouts) ---------------- */
+const S = { dir:'a', tab:'route', sortCol:null, sortAsc:false,
+  resale:'vendor', sellKey:'ah', odds:'worst', useRep:false, useTrainer:true, routeLock:true, scope:'all', showAll:true,
+  ahCut:5, ahChance:80, target:225, ahList:true, merchantList:true, sellAllVendor:false,
+  showHistory:false, settings:false, armed:null, sold:{}, bought:{}, running:false, left:0, scanProf:'Leatherworking', selStep:0, cmpOpen:false, vendTab:'buy', unpriced:14 };
+
+/* ---------------- formatting (mirrors ns.Money / signed in UI.lua) ---------------- */
+const esc = s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;');
+function money(c){ if(c==null) return '<span class="dim">?</span>'; const neg=c<0; c=Math.round(Math.abs(c)); const g=Math.floor(c/10000), s=Math.floor(c/100)%100, cp=c%100; const p=[]; if(g>0)p.push(g+'<i class="cg">g</i>'); if(g>0||s>0)p.push(s+'<i class="cs">s</i>'); p.push(cp+'<i class="cc">c</i>'); return (neg?'<span class="neg">-</span>':'')+'<span class="money">'+p.join(' ')+'</span>'; }
+function plain(c){ c=Math.round(Math.abs(c)); const g=Math.floor(c/10000), s=Math.floor(c/100)%100, cp=c%100; const p=[]; if(g>0)p.push(g+'g'); if(g>0||s>0)p.push(s+'s'); p.push(cp+'c'); return p.join(' '); }
+function signed(p){ if(p==null) return '<span class="dim">?</span>'; const r=Math.round(Math.abs(p)); if(r===0) return money(0); return p>0?'<span class="pos">+</span>'+money(r):'<span class="neg">-</span>'+money(r); }
+const ic = n=>`<svg class="ic" aria-hidden="true"><use href="#i-${n}"/></svg>`;
+const ico = (n,sz='')=>`<span class="ico ${sz}"><svg aria-hidden="true"><use href="#i-${n}"/></svg></span>`;
+const diffClass = r=> r.rank>PROF.skill ? 'dU' : 'd'+r.diff;
+
+/* ---------------- calculations (what Calc.lua gives the UI) ---------------- */
+function cost(r){ let c=0, missing=0; for(const [n,k] of r.rx){ const it=ITEMS[n]; if(it.unit==null) missing++; else c+=it.unit*k; } return {cost:c,missing}; }
+function resaleOf(r,mode){ return mode==='vendor'?r.vendor: mode==='ah'?r.ah:0; }
+function perUp(r){ const o=ODDS[S.odds][r.diff]; if(!o) return null; const {cost:c}=cost(r); return (c-resaleOf(r,S.resale))/o; }
+function segsFor(useTrainer){ return useTrainer?ROUTE_TRAINER:ROUTE_LEARNED; }
+function planFor(resale,useTrainer){
+  const segs=segsFor(useTrainer); let total=0, crafts=0, learnCost=0; const learn=[];
+  const list=segs.map(s=>{ if(s.gap) return {...s}; const r=R[s.r]; const n=s.crafts[S.odds]; const {cost:c}=cost(r); const net=n*(c-resaleOf(r,resale)); total+=net; crafts+=n; if(s.learn){ learnCost+=r.learn.fee; learn.push({r,rank:r.rank,how:r.learn.how,fee:r.learn.fee}); } return {...s,r,n,unit:c,net}; });
+  return {segs:list,total:total+learnCost,cost:total,learnCost,crafts,learn};
+}
+// prep rows (intermediates cheaper to make) and the shopping list, like Calc's plan.prep / plan.shop
+function prepFor(plan){ let haveCured={...HAVE}; return plan.segs.map(s=>{ if(s.gap) return []; const out=[]; for(const [n,k] of s.r.rx){ const it=ITEMS[n]; if(it.src==='craft'){ const units=k*s.n; const have=Math.min(units,haveCured[n]||0); haveCured[n]=(haveCured[n]||0)-have; out.push({name:n,icon:it.icon,units:units-have,have,unit:cost(R[n]).cost,for:s.r.name}); } } return out; }); }
+function shopFor(plan){ const need={}; for(const s of plan.segs){ if(s.gap) continue; for(const [n,k] of s.r.rx){ const it=ITEMS[n]; if(it.src==='craft'){ const units=Math.max(0,k*s.n); for(const [m,j] of it.rx) need[m]=(need[m]||0)+units*j; } else need[n]=(need[n]||0)+k*s.n; } }
+  // the intermediates you already hold shrink their raw materials
+  for(const [n,h] of Object.entries(HAVE)){ const it=ITEMS[n]; if(it&&it.src==='craft'&&it.rx) for(const [m,j] of it.rx) need[m]=Math.max(0,(need[m]||0)-h*j); }
+  const rows=Object.entries(need).map(([n,count])=>{ const it=ITEMS[n]; const have=(HAVE[n]||0)+(S.bought[n]||0); const buy=Math.max(0,count-have); return {name:n,icon:it.icon,unit:it.unit,src:it.src,count,have,buy,kind:buy===0?'done':(it.src==='vendor'?'vendor':'ah')}; });
+  const rank={ah:0,vendor:0,done:3}; rows.sort((a,b)=>rank[a.kind]-rank[b.kind]);
+  const left=rows.reduce((t,r)=>t+(r.unit?r.unit*r.buy:0),0); return {rows,left}; }
+function cards(){ const sel=S.resale; const out=['vendor','ah','off'].map(m=>{ const p=planFor(m,S.useTrainer); return {key:m,label:m==='off'?'No resale (reagents)':'Resale: '+(m==='ah'?'AH':'vendor'),short:m==='off'?'No resale':'Resale: '+(m==='ah'?'AH':'vendor'),plan:p,selected:m===sel}; }); const alt=planFor(sel,!S.useTrainer); out.push({key:'alt',label:S.useTrainer?'Learned recipes only':'With unlearned recipes',short:S.useTrainer?'Learned only':'With unlearned',plan:alt,selected:false}); const selTotal=out.find(c=>c.selected).plan.total; for(const c of out){ const diff=c.plan.total-selTotal; c.diff=diff; c.deltaHTML=c.selected?'<span class="sel">selected</span>':(diff===0?'<span class="dim">same</span>':`<span class="delta ${diff>0?'neg':'pos'}">${diff>0?'-':'+'}${plain(diff)}</span>`); } return out; }
+function profitRows(){ let rows=RECIPES.filter(r=>S.scope==='all'||r.rank<=PROF.skill).map(r=>{ const {cost:c,missing}=cost(r); const sale=S.sellKey==='ah'?r.ah:r.vendor; return {r,cost:c,missing,sale,profit:missing?null:sale-c}; }); if(!S.showAll) rows=rows.filter(x=>x.profit!=null&&x.profit>0); if(S.sortCol){ const k={1:x=>x.r.name.toLowerCase(),2:x=>x.missing?null:x.cost,3:x=>x.sale,4:x=>x.profit}[S.sortCol]; rows.sort((a,b)=>{ const x=k(a),y=k(b); if(x==null||y==null) return x==null&&y==null?0:(x==null?1:-1); if(x===y) return 0; return (x<y?-1:1)*(S.sortAsc?1:-1); }); } return rows; }
+function levelRows(){ let rows=RECIPES.filter(r=>r.rank<=PROF.skill).map(r=>{ const {cost:c,missing}=cost(r); return {r,cost:c,missing,perUp:missing?null:perUp(r)}; }); if(!S.showAll) rows=rows.filter(x=>x.perUp!=null); if(S.sortCol){ const k={1:x=>x.r.name.toLowerCase(),2:x=>x.missing?null:x.cost,4:x=>x.perUp}[S.sortCol]||(x=>null); rows.sort((a,b)=>{ const x=k(a),y=k(b); if(x==null||y==null) return x==null&&y==null?0:(x==null?1:-1); if(x===y) return 0; return (x<y?-1:1)*(S.sortAsc?1:-1); }); } return rows; }
+function learnHow(r){ const L=r.learn; if(!L) return ''; const mine=PROF.skill; const when=r.rank<=mine?'learn now':`skill ${r.rank}, ${r.rank-mine} to go`; const src=L.how==='trainer'?'trainer '+plain(L.fee):(L.how==='ah'?'pattern '+plain(L.fee)+' on the AH':'pattern '+plain(L.fee)); return `${when}: ${src}`; }
+
+/* ---------------- shared widgets ---------------- */
+function titlebar(title,extra=''){ return `<div class="titlebar"><svg class="logo" aria-hidden="true"><use href="#i-logo"/></svg><span>${title}</span>${extra}<span class="spacer"></span><span class="x">x</span></div>`; }
+function skillbar(w=140){ const pct=PROF.skill/PROF.max*100; return `<span class="skill"><span class="bar" style="width:${w}px"><i style="width:${pct}%"></i></span><b>${PROF.skill} / ${PROF.max}</b></span>`; }
+function profsel(){ return `<button class="btn" data-act="prof" title="Choose a profession">${ico('lw')}<b>${PROF.name}</b>${ic('chev')}</button>`; }
+function chip(k,label,val,on){ return `<button class="chip ${on?'on':''}" data-act="cycle" data-k="${k}"><span class="k">${label}</span>${val}${ic('chev')}</button>`; }
+function checkbox(k,label,extra=''){ return `<label class="check" data-act="chk" data-k="${k}"><i>${S[k]?ic('check'):''}</i>${label}${extra}</label>`; }
+function segctl(k,opts){ return `<span class="segc">${opts.map(([v,l])=>`<button data-act="set" data-k="${k}" data-v="${v}" class="${String(S[k])===String(v)?'on':''}">${l}</button>`).join('')}</span>`; }
+function tipFor(r){ const {cost:c}=cost(r); const o=ODDS[S.odds][r.diff]; return `<h4>${esc(r.name)}</h4>${r.rx.map(([n,k])=>{ const it=ITEMS[n]; return `<div class="ln"><span>${k}x ${esc(n)}</span><span>${it.unit?money(it.unit*k)+` <span class="dim">(${it.src})</span>`:'<span class="dim">no price</span>'}</span></div>`; }).join('')}<div class="ln" style="margin-top:4px"><span class="dim">Cost</span><span>${money(c)}</span></div><div class="ln"><span class="dim">Vendor sale</span><span>${money(r.vendor)}</span></div><div class="ln"><span class="dim">AH sale (net)</span><span>${money(r.ah)}</span></div><div class="ln"><span class="dim">Skill-up chance (${S.odds==='typical'?'typical':'worst case'})</span><span>${Math.round(o*100)}%</span></div>${S.resale!=='off'?`<div class="ln"><span class="dim">Net per craft (resale - cost)</span><span>${signed(resaleOf(r,S.resale)-c)}</span></div>`:''}<div class="hint">Click: open it in the profession window.</div>`; }
+function recipeName(r,withLearn=true){ const L=r.rank>PROF.skill&&withLearn?` <small>(${learnHow(r)||'source unknown'})</small>`:''; return `<span class="c name"><span class="${diffClass(r)}" style="overflow:hidden;text-overflow:ellipsis">${esc(r.name)}</span>${L}</span>`; }
+function hdr(cols,grid,sortable){ return `<div class="hdrrow" style="grid-template-columns:${grid}">${cols.map((c,i)=>{ if(c==null) return '<span></span>'; const [label,num,colIdx]=c; const on=sortable&&S.sortCol===colIdx; const arrow=on?(S.sortAsc?' '+ic('up'):' '+ic('down')):''; return `<span class="c ${num?'num':''} ${on?'on':''}" ${sortable&&colIdx?`data-act="sort" data-col="${colIdx}"`:''} title="${sortable?'Click to sort, click again to reverse. Right-click: default order.':''}">${label}${arrow}</span>`; }).join('')}</div>`; }
+const valCell = x=> x.missing?`<span class="c num warn">${x.missing} reagent${x.missing>1?'s':''} unpriced</span>`:null;
+
+/* ---- settings panel (all real options; the slash commands they replace are named) ---- */
+function settingsPanel(){ return `<div class="settings"><div class="shead">${ic('gear')} Settings <span class="spacer"></span><span class="dim tiny" style="font:12px var(--font-wow)">Shared by all characters</span><button class="btn iconbtn" data-act="settings">${ic('x')}</button></div>
+  <div class="sgrid">
+    <div class="sgroup"><h5>Planning</h5>
+      <div class="srow"><span class="lab">Crafted items sell at<small>Leveling and Route: cost net of what the result sells for</small></span>${segctl('resale',[['vendor','Vendor'],['ah','AH'],['off','Not sold']])}</div>
+      <div class="srow"><span class="lab">Skill-up odds<small>Worst case never leaves you short of materials</small></span>${segctl('odds',[['worst','Worst case'],['typical','Typical']])}</div>
+      <div class="srow"><span class="lab">Route may include unlearned recipes<small>Trainer recipes and patterns you can buy</small></span>${checkbox('useTrainer','')}</div>
+      <div class="srow"><span class="lab">Keep the route until I press Re-plan<small>Prices change; your plan does not</small></span>${checkbox('routeLock','')}</div>
+      <div class="srow"><span class="lab">Route target skill</span><input class="sinput" value="${S.target}" aria-label="Route target skill"></div>
+      <div class="srow"><span class="lab">Use my reputation<small>Off: base prices, no rep-locked patterns (worst case)</small></span>${checkbox('useRep','')}</div>
+    </div>
+    <div class="sgroup"><h5>Prices</h5>
+      <div class="srow"><span class="lab">AH cut</span><span><input class="sinput" value="${S.ahCut}" aria-label="AH cut percent"> <span class="dim">%</span></span></div>
+      <div class="srow"><span class="lab">Chance a listing sells<small>The deposit is lost when it does not</small></span><span><input class="sinput" value="${S.ahChance}" aria-label="AH sale chance percent"> <span class="dim">%</span></span></div>
+      <h5>Lists</h5>
+      <div class="srow"><span class="lab">Profit tab: which recipes</span>${segctl('scope',[['known','Known'],['all','All']])}</div>
+      <div class="srow"><span class="lab">Show</span>${segctl('showAll',[['false','Useful only'],['true','Everything']])}</div>
+      <h5>Companions</h5>
+      <div class="srow"><span class="lab">Open the shopping list at the auction house</span>${checkbox('ahList','')}</div>
+      <div class="srow"><span class="lab">Open the buy list at a vendor that sells route items</span>${checkbox('merchantList','')}</div>
+      <div class="srow"><span class="lab">Sell everything to the vendor<small>Even items the AH would pay more for</small></span>${checkbox('sellAllVendor','')}</div>
+    </div>
+  </div>
+  <div class="foot"><span>Slash commands keep working: /margin route N, odds, lock, rep, cut, chance.</span></div></div>`; }
+
+/* ---------------- route list (Ledger-style rows, also used by states) ---------------- */
+function routeRows(plan,opts={}){ const grid='56px 18px 1fr 84px 96px 108px'; const prep=prepFor(plan); let h='';
+  // history
+  const spent=HISTORY.reduce((t,e)=>t+e.cost,0);
+  h+=`<div class="sec" data-act="history" style="cursor:pointer">${S.showHistory?ic('chev'):ic('chevr')} Completed steps <span class="dim">(${HISTORY.length})</span><span class="num">${money(spent)}</span></div>`;
+  if(S.showHistory) for(const e of [...HISTORY].reverse()) h+=`<div class="row hist" style="grid-template-columns:${grid}"><span class="range">${e.from}-${e.to}</span>${ico(e.icon)}<span class="c name">${esc(e.name)}</span><span class="c num">${e.crafts} crafts</span><span class="c num dim">${e.t}</span><span class="c num">${money(e.cost)}</span></div>`;
+  h+=`<div class="sec">Steps <span class="dim">to ${PROF.target}</span><span class="num">${signed(-plan.cost)}</span></div>`;
+  plan.segs.forEach((s,i)=>{ if(s.gap){ h+=`<div class="row gap" style="grid-template-columns:${grid}"><span class="range"><b>${s.from}-${s.to}</b></span><span></span><span class="c name">no priced recipe</span><span></span><span></span><span class="c num">?</span></div>`; return; }
+    for(const p of prep[i]){ if(p.units>0) h+=`<div class="row prep" style="grid-template-columns:${grid}" data-tipprep="${esc(p.name)}|${p.units+p.have}|${esc(p.for)}|${p.have}"><span></span>${ico(p.icon)}<span class="c name"><span class="pill make">${ic('hammer')}make</span>${esc(p.name)}${p.have>0?` <span class="dim">(you have ${p.have})</span>`:''}</span><span class="c num dim">~${p.units} crafts</span><span class="c num dim">${money(p.unit)} each</span><span class="c num">${money(p.unit*p.units)}</span></div>`; else if(p.have>0) h+=`<div class="row prep" style="grid-template-columns:${grid}"><span></span>${ico(p.icon)}<span class="c name"><span class="pill have">${ic('check')}have</span>${esc(p.name)} <span class="dim">(${p.have} in your bags)</span></span><span></span><span></span><span></span></div>`; }
+    const d=s.diffAt!=null?s.diffAt:s.r.diff; h+=`<div class="row ${opts.sel===i?'sel':''}" style="grid-template-columns:${grid}" data-tip="${esc(s.r.name)}" data-act="${opts.selectable?'selstep':''}" data-i="${i}"><span class="range"><b>${s.from}-${s.to}</b></span>${ico(s.r.icon)}<span class="c name"><span class="${s.learn?'d0':'d'+d}">${esc(s.r.name)}</span>${s.learn?`<span class="pill learn">${ic('book')}learn</span>`:''}</span><span class="c num">~${s.n} crafts</span><span class="c num dim">${money(s.unit)}</span><span class="c num">${signed(-s.net)}</span></div>`; });
+  if(plan.learn.length){ h+=`<div class="sec">Recipes to learn<span class="num">${money(plan.learnCost)}</span></div>`; for(const l of plan.learn) h+=`<div class="row" style="grid-template-columns:${grid}" data-tiplearn="${esc(l.r.name)}"><span class="range">skill ${l.rank}</span>${ico(l.r.icon)}<span class="c name">${esc(l.r.name)}</span><span class="c num dim">${l.how==='trainer'?'trainer':(l.how==='ah'?'AH':'vendor')}</span><span></span><span class="c num">${money(l.fee)}</span></div>`; }
+  const shop=shopFor(plan); h+=`<div class="sec">Shopping list <span class="dim">(still to buy)</span><span class="num">${money(shop.left)}</span></div>`;
+  for(const r of shop.rows) h+=`<div class="row" style="grid-template-columns:${grid}"><span></span>${ico(r.icon)}<span class="c name">${esc(r.name)}${r.have>0?` <span class="dim">(have ${r.have})</span>`:''}</span><span class="c num ${r.buy===0?'pos':''}" style="font-weight:400">${r.buy===0?'have enough':'x '+r.buy}</span><span class="c num dim">${money(r.unit)}</span><span class="c num">${money(r.unit?r.unit*r.buy:null)}</span></div>`;
+  return h; }
+function routeHdr(){ return hdr([['Skill'],null,['Recipe / item'],['Crafts / qty',1],['Per unit',1],['Net',1]],'56px 18px 1fr 84px 96px 108px',false); }
+
+/* ---------------- Direction A: Ledger ---------------- */
+function winA(opts={}){ const t=S.tab; const lock=S.routeLock?`<span class="dim tiny" style="display:inline-flex;align-items:center;gap:4px">${ic('lock')} locked ${PROF.lockedOn}</span>`:`<span class="dim tiny">${ic('unlock')} re-plans with prices</span>`;
+  let chips=''; if(t==='profit') chips=chip('sellKey','Sell:',S.sellKey==='ah'?'AH (net)':'vendor')+chip('scope','Recipes:',S.scope)+chip('showAll','Show:',S.showAll?'everything':'useful only'); else if(t==='level') chips=chip('resale','Resale:',S.resale==='off'?'none':S.resale)+chip('odds','Odds:',S.odds==='worst'?'worst case':'typical')+chip('showAll','Show:',S.showAll?'everything':'useful only'); else chips=chip('resale','Resale:',S.resale==='off'?'none':S.resale)+chip('useTrainer','Unlearned recipes:',S.useTrainer?'on':'off',S.useTrainer)+chip('odds','Odds:',S.odds==='worst'?'worst case':'typical');
+  let body='', status='';
+  if(t==='route'){ const cs=cards(); const plan=cs.find(c=>c.selected).plan; status=`route to ${PROF.target}`;
+    body=`<div class="cards">${cs.map(c=>`<button class="card ${c.selected?'on':''}" data-act="card" data-v="${c.key}"><span class="lbl"><span>${c.label}</span>${c.deltaHTML}</span><span class="val">${signed(-c.plan.total)}<span class="sub">~${c.plan.crafts} crafts</span></span></button>`).join('')}</div>${routeHdr()}<div class="list" style="flex:1">${routeRows(plan)}</div>`; }
+  else if(t==='profit'){ const rows=profitRows(); const grid='18px 1fr 110px 110px 118px'; status=`${RECIPES.length} recipes · ${RECIPES.filter(r=>!cost(r).missing).length} priced · ${rows.length} shown`;
+    body=hdr([null,['Recipe',0,1],['Cost',1,2],[S.sellKey==='ah'?'AH (net)':'Vendor',1,3],['Profit',1,4]],grid,true)+`<div class="list" style="flex:1">${rows.map(x=>`<div class="row" style="grid-template-columns:${grid}" data-tip="${esc(x.r.name)}">${ico(x.r.icon)}${recipeName(x.r)}${valCell(x)||`<span class="c num">${money(x.cost)}</span>`}<span class="c num">${money(x.sale)}</span><span class="c num">${x.missing?'<span class="dim">?</span>':(x.r.out?signed(x.profit):'<span class="dim">makes no item</span>')}</span></div>`).join('')}</div>`; }
+  else { const rows=levelRows(); const grid='18px 1fr 110px 110px 118px'; status=`${rows.length} recipes · ${S.odds==='worst'?'worst-case':'typical'} odds`;
+    body=hdr([null,['Recipe',0,1],['Cost',1,2],[S.resale==='off'?'':'Resale',1,3],[S.resale==='off'?'Cost / skill-up':'Net / skill-up',1,4]],grid,true)+`<div class="list" style="flex:1">${rows.map(x=>`<div class="row" style="grid-template-columns:${grid}" data-tip="${esc(x.r.name)}">${ico(x.r.icon)}${recipeName(x.r)}${valCell(x)||`<span class="c num">${money(x.cost)}</span>`}<span class="c num">${S.resale==='off'?'':money(resaleOf(x.r,S.resale))}</span><span class="c num">${x.missing?'<span class="dim">?</span>':(x.perUp==null?'<span class="dim">no skill-up</span>':signed(-x.perUp))}</span></div>`).join('')}</div>`; }
+  return `<div class="wow win" style="width:700px;height:${opts.h||470}px">${titlebar('Margin')}
+   <div style="display:flex;align-items:center;gap:12px;padding:6px 10px;border-bottom:1px solid var(--w-border);background:var(--w-panel)">${profsel()}${skillbar(150)}<span class="spacer"></span>${opts.banner||''}<button class="btn iconbtn" data-act="settings" title="Settings">${ic('gear')}</button></div>
+   <div style="display:flex;align-items:center;gap:2px;padding:0 6px;border-bottom:1px solid var(--w-border)">${['profit','level','route'].map(k=>`<button class="tab ${t===k?'on':''}" data-act="tab" data-v="${k}">${TAB_NAME[k]}</button>`).join('')}<span class="spacer"></span>${t==='route'?`${lock}<button class="btn sm" data-act="replan" ${S.routeLock?'':'disabled'} style="margin:0 4px 0 10px">${ic('replan')}Re-plan</button>`:`<label class="search" style="margin:2px 4px">${ic('search')}<input placeholder="Search recipes and reagents" aria-label="Search"></label>`}</div>
+   <div style="display:flex;align-items:center;gap:6px;padding:5px 10px;border-bottom:1px solid var(--w-border);background:var(--w-panel)">${chips}<span class="spacer"></span><span class="dim tiny" style="white-space:nowrap">${status}</span></div>
+   ${opts.warn?`<div class="banner">${ic('warn')}${opts.warn}</div>`:''}
+   ${body}${S.settings&&!opts.noSettings?settingsPanel():''}</div>`; }
+
+/* ---------------- Direction B: Workbench ---------------- */
+function detailFor(r,n){ const {cost:c}=cost(r); const o=ODDS[S.odds][r.diff]; return `<div class="detail"><div class="dh">${ico(r.icon,'lg')}<div style="min-width:0"><div class="nm ${diffClass(r)}">${esc(r.name)}</div><div class="sub">${r.rank>PROF.skill?learnHow(r):`skill-up ${Math.round(o*100)}% (${S.odds==='worst'?'worst case':'typical'})`}</div></div></div>
+  <div class="kvl">${r.rx.map(([nm,k])=>{ const it=ITEMS[nm]; return `<span class="k">${k}x ${esc(nm)} <span class="dim">(${it.src||'no price'})</span></span><span class="v">${it.unit?money(it.unit*k):'<span class="warn">unpriced</span>'}</span>`; }).join('')}<span class="k tot">Cost per craft</span><span class="v tot">${money(c)}</span><span class="k">Vendor sale</span><span class="v">${money(r.vendor)}</span><span class="k">AH sale (net)</span><span class="v">${money(r.ah)}</span>${S.resale!=='off'?`<span class="k">Net per craft</span><span class="v">${signed(resaleOf(r,S.resale)-c)}</span>`:''}</div>
+  <div class="dactions"><button class="btn pri" style="flex:1;justify-content:center">${ic('hammer')}${n?`Open and craft ${n}`:'Open in profession window'}</button>${r.rank>PROF.skill?`<button class="btn">${ic('book')}Learn first</button>`:''}</div></div>`; }
+function shopPanel(plan,compact){ const shop=shopFor(plan); return `<div class="sec">Shopping list <span class="dim">(still to buy)</span><span class="num">${money(shop.left)}</span></div><div class="list" style="flex:1">${shop.rows.map(r=>`<div class="srow2 ${r.kind==='done'?'done':''}">${ico(r.icon,'lg')}<div class="t"><span class="n">${esc(r.name)}${r.kind==='vendor'?'<span class="pill vend">vendor</span>':(r.kind==='ah'?'<span class="pill ah">AH</span>':'<span class="pill done">done</span>')}</span><span class="s"><span class="have"><span class="bar thin"><i style="width:${Math.min(100,r.have/r.count*100)}%"></i></span>${r.have} / ${r.count}</span>${r.buy>0?`· buy ${r.buy} · ${money(r.unit)} each`:''}</span></div><span class="num">${r.buy>0?money(r.unit?r.unit*r.buy:null):''}</span></div>`).join('')}</div>`; }
+function winB(opts={}){ const t=S.tab; const cs=cards(); const plan=cs.find(c=>c.selected).plan; const sel=Math.min(S.selStep,plan.segs.length-1); const selSeg=plan.segs[sel]&&!plan.segs[sel].gap?plan.segs[sel]:plan.segs.find(s=>!s.gap);
+  let left='', right='';
+  if(t==='route'){ const prep=prepFor(plan);
+    left=`<div class="cmpstrip">${cs.map(c=>`<button class="${c.selected?'on':''}" data-act="card" data-v="${c.key}" title="${c.label}"><span class="l"><span>${c.short}</span>${c.deltaHTML}</span><span>${signed(-c.plan.total)} <span class="dim tiny">~${c.plan.crafts} crafts</span></span></button>`).join('')}</div>
+    <div class="list" style="flex:1">
+      <div class="sec" data-act="history" style="cursor:pointer">${S.showHistory?ic('chev'):ic('chevr')} Completed steps <span class="dim">(${HISTORY.length})</span><span class="num">${money(HISTORY.reduce((t,e)=>t+e.cost,0))}</span></div>
+      ${S.showHistory?[...HISTORY].reverse().map(e=>`<div class="row hist" style="grid-template-columns:56px 18px 1fr 84px 70px 96px"><span class="range">${e.from}-${e.to}</span>${ico(e.icon)}<span class="c name">${esc(e.name)}</span><span class="c num">${e.crafts} crafts</span><span class="c num">${e.t}</span><span class="c num">${money(e.cost)}</span></div>`).join(''):''}
+      ${plan.segs.map((s,i)=>{ if(s.gap) return `<div class="step"><div class="sk"><b>${s.from}</b><span>to ${s.to}</span></div><div class="sb"><div class="main"><span></span><span class="nm neg">no priced recipe</span><span></span><span class="num">?</span></div></div></div>`;
+        const d=s.diffAt!=null?s.diffAt:s.r.diff; return `<div class="step ${i===sel?'on':''}" data-act="selstep" data-i="${i}" data-tip="${esc(s.r.name)}"><div class="sk"><span class="n">${i+1}</span><b>${s.from}</b><span>to ${s.to}</span></div><div class="sb"><div class="main">${ico(s.r.icon)}<span class="nm"><span class="${s.learn?'d0':'d'+d}">${esc(s.r.name)}</span>${s.learn?`<span class="pill learn">${ic('book')}learn</span>`:''}</span><span class="num dim">~${s.n} crafts · ${money(s.unit)} each</span><span class="num big">${signed(-s.net)}</span></div>${prep[i].map(p=>p.units>0?`<div class="sub">${ico(p.icon)}<span><span class="pill make">${ic('hammer')}make</span> ${esc(p.name)}${p.have>0?` <span class="dim">(you have ${p.have})</span>`:''}</span><span class="num">~${p.units} crafts</span><span class="num">${money(p.unit*p.units)}</span></div>`:(p.have>0?`<div class="sub">${ico(p.icon)}<span><span class="pill have">${ic('check')}have</span> ${esc(p.name)} (${p.have} in your bags)</span><span></span><span></span></div>`:'')).join('')}</div></div>`; }).join('')}
+      ${plan.learn.length?`<div class="sec">Recipes to learn<span class="num">${money(plan.learnCost)}</span></div>${plan.learn.map(l=>`<div class="row" style="grid-template-columns:56px 18px 1fr 84px 96px" data-tiplearn="${esc(l.r.name)}"><span class="range">skill ${l.rank}</span>${ico(l.r.icon)}<span class="c name">${esc(l.r.name)}</span><span class="c num dim">${l.how==='trainer'?'trainer':(l.how==='ah'?'AH':'vendor')}</span><span class="c num">${money(l.fee)}</span></div>`).join('')}`:''}
+    </div>`;
+    right=(selSeg?detailFor(selSeg.r,selSeg.n):'')+shopPanel(plan); }
+  else { const rows=t==='profit'?profitRows():levelRows(); const grid='18px 1fr 100px 104px'; const selR=(rows[Math.min(S.selStep,rows.length-1)]||rows[0]);
+    left=hdr([null,['Recipe',0,1],['Cost',1,2],[t==='profit'?'Profit':(S.resale==='off'?'Cost / skill-up':'Net / skill-up'),1,4]],grid,true)+`<div class="list" style="flex:1">${rows.map((x,i)=>`<div class="row ${x===selR?'sel':''}" style="grid-template-columns:${grid}" data-act="selstep" data-i="${i}" data-tip="${esc(x.r.name)}">${ico(x.r.icon)}${recipeName(x.r,false)}${valCell(x)||`<span class="c num">${money(x.cost)}</span>`}<span class="c num">${x.missing?'<span class="dim">?</span>':(t==='profit'?signed(x.profit):(x.perUp==null?'<span class="dim">no skill-up</span>':signed(-x.perUp)))}</span></div>`).join('')}</div>`;
+    right=(selR?detailFor(selR.r):'')+`<div class="detail" style="border-bottom:0"><h5 style="margin:0 0 6px;font:600 11px var(--font-wow);letter-spacing:.04em;text-transform:uppercase;color:var(--w-dim)">${t==='profit'?'Profit view':'Leveling view'}</h5><div class="kvl" style="row-gap:6px">${t==='profit'?`<span class="k">Sell at</span><span class="v">${segctl('sellKey',[['vendor','Vendor'],['ah','AH']])}</span><span class="k">Recipes</span><span class="v">${segctl('scope',[['known','Known'],['all','All']])}</span>`:`<span class="k">Resale</span><span class="v">${segctl('resale',[['vendor','Vendor'],['ah','AH'],['off','None']])}</span><span class="k">Odds</span><span class="v">${segctl('odds',[['worst','Worst'],['typical','Typical']])}</span>`}<span class="k">Show</span><span class="v">${segctl('showAll',[['false','Useful'],['true','All']])}</span></div></div>`; }
+  return `<div class="wow win" style="width:860px;height:${opts.h||540}px">${titlebar('Margin')}
+   <div style="display:flex;align-items:center;gap:10px;padding:5px 10px;border-bottom:1px solid var(--w-border);background:var(--w-panel)">${profsel()}${skillbar(120)}<span style="width:14px"></span>${['route','profit','level'].map(k=>`<button class="tab ${t===k?'on':''}" data-act="tab" data-v="${k}" style="padding:3px 10px 4px">${TAB_NAME[k]}</button>`).join('')}<span class="spacer"></span>${t==='route'?`<span class="dim tiny" style="display:inline-flex;align-items:center;gap:4px">${S.routeLock?ic('lock')+' locked '+PROF.lockedOn:ic('unlock')+' follows prices'}</span><button class="btn sm" data-act="replan" ${S.routeLock?'':'disabled'}>${ic('replan')}Re-plan</button>`:`<label class="search">${ic('search')}<input placeholder="Search" aria-label="Search"></label>`}<button class="btn iconbtn" data-act="settings" title="Settings">${ic('gear')}</button></div>
+   ${opts.warn?`<div class="banner">${ic('warn')}${opts.warn}</div>`:''}
+   <div class="wb"><div class="left">${left}</div><div class="right">${right}</div></div>${S.settings&&!opts.noSettings?settingsPanel():''}</div>`; }
+
+/* ---------------- Direction C: Tracker ---------------- */
+function winC(opts={}){ const t=S.tab; const cs=cards(); const selCard=cs.find(c=>c.selected); const plan=selCard.plan; const prep=prepFor(plan); const shop=shopFor(plan);
+  let body='';
+  if(t==='route'){ const i=plan.segs.findIndex(s=>!s.gap); const s=plan.segs[i]; const pr=prep[i]||[]; const bestAlt=cs.filter(c=>!c.selected&&c.diff<0).sort((a,b)=>a.diff-b.diff)[0];
+    body=`<div class="cmpline" data-act="cmp"><span class="k">Priced with</span><b>${selCard.label.replace('Resale: ','resale: ')}</b><span class="spacer"></span><span>${signed(-plan.total)}</span>${ic('chev')}
+      ${S.cmpOpen?`<div class="cmppop">${cs.map(c=>`<div class="o ${c.selected?'on':''}" data-act="card" data-v="${c.key}"><span>${c.label}</span><span class="num">${signed(-c.plan.total)}</span><span class="d">${c.deltaHTML}</span></div>`).join('')}</div>`:''}</div>
+    ${bestAlt?`<div class="banner" style="font-size:11px">${ic('coin')}${bestAlt.label} would save ${plain(-bestAlt.diff)}<span class="spacer"></span><button class="btn" data-act="card" data-v="${bestAlt.key}">Use it</button></div>`:''}
+    <div class="now"><div class="lab"><span>Now · step ${i+1} of ${plan.segs.length}</span><span class="dim" style="font-weight:400;letter-spacing:0;text-transform:none">${s.from} to ${s.to}</span></div>
+      <div class="big">${ico(s.r.icon,'lg')}<div style="min-width:0"><div class="nm ${s.learn?'d0':'d'+s.r.diff}">${esc(s.r.name)}</div><div class="meta"><span>~${s.n} crafts</span><span>${money(s.unit)} each</span><span>${signed(-s.net)}</span></div></div></div>
+      <div class="checks">${pr.map(p=>p.units>0?`<div class="ck" data-act="tick" data-k="prep-${esc(p.name)}"><i>${S['prep-'+p.name]?ic('check'):''}</i><span class="t"><span class="pill make">make</span>${esc(p.name)}${p.have>0?` <span class="dim">(have ${p.have})</span>`:''}</span><span class="r">~${p.units}</span></div>`:'').join('')}
+      ${s.r.rx.filter(([n])=>ITEMS[n].src!=='craft').map(([n,k])=>{ const row=shop.rows.find(x=>x.name===n); const ok=row&&row.buy===0; return `<div class="ck ${ok?'done':''}"><i>${ok?ic('check'):''}</i><span class="t">${esc(n)}</span><span class="r">${k*s.n}${row?` · have ${row.have}`:''}</span></div>`; }).join('')}</div>
+      <div class="nowactions"><button class="btn pri">${ic('hammer')}Open, craft ${s.n}</button>${s.learn?`<button class="btn">${ic('book')}Learn first</button>`:''}</div></div>
+    <div class="sec">Next<span class="num dim">${plan.segs.length-i-1} steps</span></div>
+    <div class="list next" style="flex:1">${plan.segs.slice(i+1).map(s2=>s2.gap?`<div class="row gap" style="grid-template-columns:52px 1fr auto"><span class="range"><b>${s2.from}-${s2.to}</b></span><span class="c">no priced recipe</span><span class="num">?</span></div>`:`<div class="row" style="grid-template-columns:52px 16px 1fr auto" data-tip="${esc(s2.r.name)}"><span class="range"><b>${s2.from}-${s2.to}</b></span>${ico(s2.r.icon)}<span class="c name"><span class="${s2.learn?'d0':'d'+(s2.diffAt!=null?s2.diffAt:s2.r.diff)}">${esc(s2.r.name)}</span>${s2.learn?`<span class="pill learn">learn</span>`:''}</span><span class="num dim">~${s2.n}</span></div>`).join('')}
+      <div class="sec">Shopping <span class="dim">(still to buy)</span><span class="num">${money(shop.left)}</span></div>
+      ${shop.rows.map(r=>`<div class="ck ${r.buy===0?'done':''}" style="padding:0 10px;min-height:22px"><i>${r.buy===0?ic('check'):''}</i><span class="t">${ico(r.icon)}${esc(r.name)} ${r.kind==='vendor'?'<span class="pill vend">vendor</span>':(r.kind==='ah'?'<span class="pill ah">AH</span>':'')}</span><span class="r">${r.buy===0?'have enough':`${r.have} / ${r.count}`}</span></div>`).join('')}
+      <div class="sec" data-act="history" style="cursor:pointer">${S.showHistory?ic('chev'):ic('chevr')} Completed <span class="dim">(${HISTORY.length})</span><span class="num">${money(HISTORY.reduce((t,e)=>t+e.cost,0))}</span></div>
+      ${S.showHistory?[...HISTORY].reverse().map(e=>`<div class="row hist" style="grid-template-columns:52px 16px 1fr auto"><span class="range">${e.from}-${e.to}</span>${ico(e.icon)}<span class="c name">${esc(e.name)}</span><span class="num">${money(e.cost)}</span></div>`).join(''):''}
+    </div>`; }
+  else { const rows=t==='profit'?profitRows():levelRows();
+    body=`<div class="hdrrow" style="grid-template-columns:1fr auto;padding:0 10px"><span class="c ${S.sortCol===1?'on':''}" data-act="sort" data-col="1">Recipe${S.sortCol===1?(S.sortAsc?ic('up'):ic('down')):''}</span><span class="c num ${S.sortCol===4?'on':''}" data-act="sort" data-col="4">${t==='profit'?(S.sellKey==='ah'?'Profit (AH)':'Profit (vendor)'):'Net / skill-up'}${S.sortCol===4?(S.sortAsc?ic('up'):ic('down')):''}</span></div>
+    <div class="list" style="flex:1">${rows.map(x=>`<div class="crow" data-tip="${esc(x.r.name)}">${ico(x.r.icon)}<div class="t"><span class="n ${diffClass(x.r)}">${esc(x.r.name)}</span><span class="s">${x.missing?`<span class="warn">${x.missing} reagent${x.missing>1?'s':''} unpriced</span>`:`cost ${money(x.cost)}${t==='profit'?' · sells '+money(x.sale):''}`}${x.r.rank>PROF.skill?` · <span class="dU">${learnHow(x.r)}</span>`:''}</span></div><span class="num" style="font-size:13px">${x.missing?'<span class="dim">?</span>':(t==='profit'?signed(x.profit):(x.perUp==null?'<span class="dim">no skill-up</span>':signed(-x.perUp)))}</span></div>`).join('')}</div>
+    <div class="foot">${t==='profit'?chip('sellKey','Sell:',S.sellKey==='ah'?'AH':'vendor')+chip('scope','Recipes:',S.scope):chip('resale','Resale:',S.resale==='off'?'none':S.resale)+chip('odds','Odds:',S.odds)}</div>`; }
+  return `<div class="wow win" style="width:320px;height:${opts.h||520}px">${titlebar('Margin',`<span class="dim" style="font:12px var(--font-wow);margin-left:4px">· ${PROF.name}</span>`)}
+   <div style="display:flex;align-items:center;gap:8px;padding:5px 10px;border-bottom:1px solid var(--w-border);background:var(--w-panel)">${skillbar(110)}<span class="spacer"></span><span class="segc">${['route','profit','level'].map(k=>`<button class="${t===k?'on':''}" data-act="tab" data-v="${k}">${k==='level'?'Lvl':TAB_NAME[k]}</button>`).join('')}</span></div>
+   ${opts.warn?`<div class="banner" style="font-size:11px">${ic('warn')}${opts.warn}</div>`:''}
+   <div class="trk">${body}</div>
+   <div class="foot"><span style="display:inline-flex;align-items:center;gap:4px">${S.routeLock?ic('lock'):ic('unlock')}${S.routeLock?'locked '+PROF.lockedOn:'follows prices'}</span><span class="spacer"></span><button class="btn sm" data-act="replan" ${S.routeLock?'':'disabled'}>Re-plan</button><button class="btn sm" data-act="settings" title="Settings">${ic('gear')}</button><button class="btn sm pri" title="Open the full analysis window (Ledger layout)">${ic('expand')}Expand</button></div>
+   ${S.settings&&!opts.noSettings?`<div class="settings"><div class="shead">${ic('gear')} Settings<span class="spacer"></span><button class="btn iconbtn" data-act="settings">${ic('x')}</button></div><div class="sgrid" style="grid-template-columns:1fr"><div class="sgroup"><h5>Planning</h5><div class="srow"><span class="lab">Crafted items sell at</span>${segctl('resale',[['vendor','Vendor'],['ah','AH'],['off','No']])}</div><div class="srow"><span class="lab">Skill-up odds</span>${segctl('odds',[['worst','Worst'],['typical','Typical']])}</div><div class="srow"><span class="lab">Unlearned recipes in route</span>${checkbox('useTrainer','')}</div><div class="srow"><span class="lab">Keep route until Re-plan</span>${checkbox('routeLock','')}</div><div class="srow"><span class="lab">Use my reputation</span>${checkbox('useRep','')}</div><div class="srow"><span class="lab">Route target</span><input class="sinput" value="${S.target}" aria-label="Route target"></div><h5>Prices</h5><div class="srow"><span class="lab">AH cut</span><span><input class="sinput" value="${S.ahCut}" aria-label="AH cut"> %</span></div><div class="srow"><span class="lab">Chance a listing sells</span><span><input class="sinput" value="${S.ahChance}" aria-label="Sale chance"> %</span></div><h5>Companions</h5><div class="srow"><span class="lab">Shopping list at the AH</span>${checkbox('ahList','')}</div><div class="srow"><span class="lab">Buy list at vendors</span>${checkbox('merchantList','')}</div><div class="srow"><span class="lab">Sell everything to the vendor</span>${checkbox('sellAllVendor','')}</div></div></div></div>`:''}</div>`; }
+
+/* ---------------- companions ---------------- */
+function ahStrip(){ const n=S.unpriced; return `<div class="wow strip" style="width:${S.running?520:470}px"><span class="brand">${ic('logo')}Margin</span><button class="btn" data-act="scanprof" title="Which profession the lookup covers. Click to cycle.">Scan: <b>${S.scanProf==='all'?'all professions':S.scanProf}</b>${ic('chev')}</button><button class="btn" title="Open the route's shopping list">${ic('cart')}Shopping list <span class="count">${shopFor(cards().find(c=>c.selected).plan).rows.filter(r=>r.kind==='ah').length}</span></button><button class="btn ${S.running?'run':''}" data-act="unpriced" title="Looks up only the items Margin has no price for. Shift-click: also unpriced crafted results. Right-click: count searched items again.">${S.running?`<span class="pulse"></span>Looking up · ${S.left} left · <b>Stop</b>`:`${ic('ask')}<span class="count ${n>0?'hot':''}">${n}</span> unpriced · Look up`}</button></div>`; }
+function ahPopup(variant){ const plan=cards().find(c=>c.selected).plan; const shop=shopFor(plan); const groups=[['ah','Auction house',ic('coin')],['vendor','Vendor',ic('cart')],['done','Done',ic('check')]];
+  let rows=''; for(const [k,label] of groups){ const rs=shop.rows.filter(r=>r.kind===k); if(!rs.length) continue; rows+=`<div class="sec">${label} <span class="dim">(${rs.length})</span>${k==='ah'?`<span class="num">${money(rs.reduce((t,r)=>t+(r.unit?r.unit*r.buy:0),0))}</span>`:''}</div>`+rs.map(r=>`<div class="srow2 ${k==='done'?'done':''} ${k==='vendor'?'mute':''}">${ico(r.icon,'lg')}<div class="t"><span class="n">${esc(r.name)}${S.bought[r.name]?`<span class="dU tiny">(+${S.bought[r.name]} on the way)</span>`:''}</span><span class="s"><span class="have"><span class="bar thin"><i style="width:${Math.min(100,r.have/r.count*100)}%"></i></span>${r.have} / ${r.count}</span>${r.buy>0?`· ${money(r.unit)} each`:''}</span></div>${k==='ah'?`<button class="btn sm" data-act="search" data-k="${esc(r.name)}" title="Opens the item in the AH buy view with the count filled in. Buying is your click.">${ic('search')}Search ${r.buy}</button>`:(k==='vendor'?`<span class="dim tiny">buy at a vendor</span>`:'')}</div>`).join(''); }
+  if(variant==='c') return `<div class="wow" style="width:320px;height:380px">${titlebar('Margin',`<span class="dim" style="font:12px var(--font-wow);margin-left:4px">· shopping</span>`)}<div class="banner" style="background:var(--w-panel);color:var(--w-dim)">${ic('pin')}Docked to the auction house<span class="spacer"></span><span>still to buy ${money(shop.left)}</span></div><div class="list" style="flex:1">${rows}</div><div class="foot">Search fills in the count; buying is your click.</div></div>`;
+  return `<div class="wow" style="width:360px;height:${variant==='b'?400:380}px">${titlebar('Shopping list')}<div style="display:flex;align-items:center;gap:8px;padding:5px 10px;border-bottom:1px solid var(--w-border);background:var(--w-panel);font-size:12px"><span>${PROF.name} <b>${PROF.skill}</b> to <b>${PROF.target}</b></span><span class="spacer"></span><span class="dim">still to buy</span><span>${money(shop.left)}</span></div><div class="list" style="flex:1">${rows}</div><div class="foot">${ic('search')}Search fills in the count; buying is your click.</div></div>`; }
+function vendorPopup(opts={}){ const plan=cards().find(c=>c.selected).plan; const shop=shopFor(plan); const tab=S.vendTab;
+  const buyRows=[ ...shop.rows.filter(r=>r.src==='vendor').map(r=>({...r,stack:1,price:r.unit})), {name:'Medium Hide',icon:'hide',count:12,have:12,buy:0,unit:600,stack:1,price:600,kind:'done'}, {name:'Heavy Leather',icon:'leather2',count:368,have:12,buy:356,unit:600,cheaper:true} ];
+  const sellRows=[ {name:'Barbaric Shoulders',icon:'shoulders',count:5-(S.sold['Barbaric Shoulders']||0),unit:4810,steps:'160-165',ahNet:19500}, {name:"Hillman's Belt",icon:'belt',count:9-(S.sold["Hillman's Belt"]||0),unit:1890,steps:'140-160',ahNet:2700} ].filter(r=>r.count>0);
+  const sellable=sellRows.filter(r=>S.sellAllVendor||!(r.ahNet>r.unit)); const sellN=sellable.reduce((t,r)=>t+r.count,0), sellV=sellable.reduce((t,r)=>t+r.count*r.unit,0);
+  const buyCost=buyRows.filter(r=>r.buy>0&&!r.cheaper).reduce((t,r)=>t+r.buy*r.unit,0);
+  let body='';
+  if(tab==='buy') body=`<div class="banner" style="background:var(--w-panel);color:var(--w-text)">Still to buy here <b>${money(buyCost)}</b><span class="spacer"></span><span class="dim">you have</span> ${money(1424350)}</div><div class="list" style="flex:1">${buyRows.map(r=>`<div class="srow2 ${r.buy===0?'done':''} ${r.cheaper?'mute':''}">${ico(r.icon,'lg')}<div class="t"><span class="n">${esc(r.name)}${r.cheaper?'<span class="pill ah">AH is cheaper</span>':''}</span><span class="s">${r.buy===0?`need ${r.count}, you have ${r.have}`:`need ${r.count}, have ${r.have} · ${money(r.unit*r.buy)}`}</span></div>${r.buy>0&&!r.cheaper?`<button class="btn sm" data-act="buy" data-k="${esc(r.name)}" ${S.busy?'disabled':''}>${ic('cart')}Buy ${r.buy}</button>`:''}</div>`).join('')}</div>${opts.err?`<div class="banner err">${ic('warn')}${opts.err}</div>`:''}<div style="padding:8px 10px;border-top:1px solid var(--w-border)"><button class="btn pri" style="width:100%;justify-content:center" data-act="buyall">${ic('cart')}${S.perClick?'Buy next stack (click per stack)':'Buy everything for the route'}</button><div class="dim tiny" style="margin-top:4px">Buys only what you still need; stops if bags are full or gold runs out.</div></div>`;
+  else body=`<div class="banner" style="background:var(--w-panel);color:var(--w-text)">Crafted items in your bags <b>${money(sellRows.reduce((t,r)=>t+r.count*r.unit,0))}</b> at this vendor</div><div class="list" style="flex:1">${sellRows.length?sellRows.map(r=>{ const armed=S.armed===r.name; const ahBetter=r.ahNet>r.unit; return `<div class="srow2">${ico(r.icon,'lg')}<div class="t"><span class="n">${esc(r.name)}</span><span class="s">${r.count} in bags · ${money(r.count*r.unit)} · step ${r.steps}${ahBetter?` · <span class="warn">AH ~${plain(r.ahNet)} each</span>`:''}</span></div><button class="btn sm ${armed?'armed':''}" data-act="sell" data-k="${esc(r.name)}">${armed?`Sure? ${r.count}`:`Sell ${r.count}`}</button></div>`; }).join(''):`<div class="empty"><p>No crafted items from your route in your bags.</p></div>`}</div>${opts.err?`<div class="banner err">${ic('warn')}${opts.err}</div>`:''}${S.soldMsg?`<div class="banner" style="background:#1b3a22;color:var(--profit)">${ic('check')}${S.soldMsg}</div>`:''}<div style="padding:8px 10px;border-top:1px solid var(--w-border)"><button class="btn ${S.armed==='all'?'armed':'pri'}" style="width:100%;justify-content:center" data-act="sellall" ${sellN?'':'disabled'}>${S.armed==='all'?`Click again: sell ${sellN} items for ${plain(sellV)}`:'Sell all crafted items'}</button><div style="display:flex;align-items:center;justify-content:space-between;margin-top:5px;gap:8px">${checkbox('sellAllVendor','Sell everything to the vendor',`<span class="dim tiny">(even what the AH pays more for)</span>`)}</div><div class="dim tiny" style="margin-top:4px">Skips anything a later step uses. Two clicks to confirm.</div></div>`;
+  return `<div class="wow" style="width:360px;height:${opts.h||400}px">${titlebar('Margin: this vendor')}<div style="display:flex;align-items:center;gap:8px;padding:5px 10px;border-bottom:1px solid var(--w-border)"><span class="segc"><button class="${tab==='buy'?'on':''}" data-act="vtab" data-v="buy">Buy for the route</button><button class="${tab==='sell'?'on':''}" data-act="vtab" data-v="sell">Sell crafted items</button></span><span class="spacer"></span><span class="dim tiny">Thorkaf Dragoneye</span></div>${body}</div>`; }
+function gameAH(){ return `<div class="gamefr" style="width:300px;height:140px"><div class="gt">Auction House</div><span class="gclose">x</span><div class="gin"><i></i><i style="width:70%"></i><i></i><i style="width:40%"></i></div></div>`; }
+function gameVendor(){ return `<div class="gamefr" style="width:250px;height:400px"><div class="gt">Thorkaf Dragoneye</div><span class="gclose">x</span><div class="gin" style="grid-template-columns:1fr 1fr">${'<i></i>'.repeat(12)}</div></div>`; }
+function profWindow(){ const r=R["Barbaric Shoulders"]; const {cost:c}=cost(r); return `<div class="gamefr" style="width:520px;height:230px"><div class="gt">Leatherworking</div><span class="gclose">x</span><span class="gbtn m" style="position:absolute;right:28px;top:2px">${ic('logo')}Margin</span><div style="display:grid;grid-template-columns:200px 1fr;height:204px"><div class="gin" style="border-right:1px solid #3a2f20">${'<i></i>'.repeat(9)}</div><div><div class="recipe">${ico(r.icon,'xl')}<div><div class="rn">Barbaric Shoulders</div><div class="ms">${ic('logo')}<span>Margin:</span> cost ${money(c)} · vendor ${money(r.vendor)} · ${signed(r.vendor-c)} · <b>route step 160-165</b> <span class="tag prop" style="font-size:9px;padding:0 4px">proposed</span></div></div></div><div class="gin">${'<i></i>'.repeat(4)}</div><div style="display:flex;gap:6px;padding:6px 8px;justify-content:flex-end"><span class="gbtn">Create All</span><span class="gbtn">Create</span></div></div></div></div>`; }
+
+/* ---------------- states ---------------- */
+function emptyState(dir){ const w=dir==='c'?320:(dir==='b'?520:460); return `<div class="wow" style="width:${w}px;height:260px">${titlebar('Margin')}<div class="empty"><div><svg class="hero" aria-hidden="true"><use href="#i-logo"/></svg><h4>Nothing scanned yet</h4><p>Open a profession window once and Margin reads its recipes. It keeps following your skill after that.</p><div style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap"><button class="btn pri">${ic('lw')}Open Leatherworking</button><button class="btn">Open Cooking</button><button class="btn">Open First Aid</button></div></div></div></div>`; }
+function unpricedState(dir){ const grid='18px 1fr 110px 110px 118px'; const rows=[R['Barbaric Gloves'],R['Barbaric Shoulders'],R["Hillman's Cloak"]]; return `<div class="wow" style="width:${dir==='c'?320:460}px;height:200px">${titlebar('Margin')}<div class="banner">${ic('warn')}14 reagents have no price yet. Figures with ? are waiting on them.<span class="spacer"></span><button class="btn">At the AH: Look up</button></div>${dir==='c'?'':hdr([null,['Recipe'],['Cost',1],['Vendor',1],['Profit',1]],grid,false)}<div class="list">${rows.map((r,i)=>{ const x={r,...cost(r)}; return dir==='c'?`<div class="crow">${ico(r.icon)}<div class="t"><span class="n ${diffClass(r)}">${esc(r.name)}</span><span class="s">${x.missing?'<span class="warn">1 reagent unpriced</span>':'cost '+money(x.cost)}</span></div><span class="num">${x.missing?'<span class="dim">?</span>':signed(r.vendor-x.cost)}</span></div>`:`<div class="row" style="grid-template-columns:${grid}">${ico(r.icon)}${recipeName(r)}${valCell(x)||`<span class="c num">${money(x.cost)}</span>`}<span class="c num">${money(r.vendor)}</span><span class="c num">${x.missing?'<span class="dim">?</span>':signed(r.vendor-x.cost)}</span></div>`; }).join('')}<div class="row" style="grid-template-columns:${grid}"><span></span><span class="c name dim">Loading item names…</span><span></span><span></span><span></span></div></div></div>`; }
+function longList(dir){ const grid='18px 1fr 110px 110px 118px'; const all=[...RECIPES,...RECIPES,...RECIPES].map((r,i)=>r); return `<div class="wow" style="width:${dir==='c'?320:460}px;height:240px">${titlebar('Margin')}<div style="display:flex;align-items:center;gap:8px;padding:4px 10px;border-bottom:1px solid var(--w-border);background:var(--w-panel)"><label class="search">${ic('search')}<input value="hide" aria-label="Search"></label><span class="spacer"></span><span class="dim tiny">57 recipes · 48 priced · 57 shown</span></div>${dir==='c'?'':hdr([null,['Recipe'],['Cost',1],['Vendor',1],['Profit',1]],grid,false)}<div class="list" style="flex:1">${all.map(r=>{ const x=cost(r); return dir==='c'?`<div class="crow">${ico(r.icon)}<div class="t"><span class="n ${diffClass(r)}">${esc(r.name)}</span><span class="s">cost ${money(x.cost)}</span></div><span class="num">${signed(r.vendor-x.cost)}</span></div>`:`<div class="row" style="grid-template-columns:${grid}">${ico(r.icon)}${recipeName(r,false)}<span class="c num">${money(x.cost)}</span><span class="c num">${money(r.vendor)}</span><span class="c num">${x.missing?'<span class="dim">?</span>':signed(r.vendor-x.cost)}</span></div>`; }).join('')}</div><div class="foot">Mouse wheel scrolls 3 rows; the bar is a real Slider. Search matches recipe and reagent names.</div></div>`; }
+function tooltipState(){ const r=R["Hillman's Leather Gloves"]; return `<div class="wow tip static" style="width:270px">${tipFor(r)}</div>`; }
+function prepTooltip(){ return `<div class="wow tip static" style="width:270px"><h4>Cured Heavy Hide</h4><div class="ln"><span>5 needed for Barbaric Shoulders; making them costs less than buying them.</span></div><div class="ln pos" style="color:var(--profit)">You already hold 3, so only 2 are left to make.</div><div class="mute" style="margin-top:4px">Do this before the step below.</div><div class="hint">Click: open it in the profession window, craft 2.</div></div>`; }
+
+/* ---------------- directions: copy and tokens ---------------- */
+const SHARED_TOKENS=[['profit','+ profit','#6ee86e'],['loss','- loss','#ff6b6b'],['gold','gold','#ffd700'],['silver','silver','#c8c8c8'],['copper','copper','#eda55f'],['warn','warning','#ffd070'],['unlearned','unlearned (blue)','#80c0ff'],['make','make / prep','#9fb4ff']];
+const DIRS={
+  a:{ name:'A · Ledger', one:'A refined version of today’s tabbed window.',
+    tokens:{bg:'#0e0d10',panel:'#17161b',panel2:'#201e25',border:'#4b3f26',text:'#ece6d6',dim:'#958e7d',accent:'#d9b24c'},
+    type:'Title: Friz Quadrata 15 (GameFontNormal / the game’s title font). Rows: Friz Quadrata 13 (GameFontHighlight), numbers tabular via right-justified font strings. Labels: 11 uppercase, +4% tracking (GameFontNormalSmall recoloured). Spacing scale 4 / 8 / 12 / 16; row height 22; section band 22.',
+    why:'Keeps what people already know (three tabs, one list, four cards) and fixes the hierarchy problems: navigation, filters and settings were one row of six look-alike buttons; the info line truncated; the Route tab stuffed history, steps, learning and shopping into one list with fake header rows. The Ledger gives each of those a place: profession and skill in a header band, real tabs, one row of context chips (only the ones the tab uses, with the setting name on the chip), real section bands, and a Settings panel behind a gear for everything else.',
+    suits:'Players who want the analysis in front of them, and the smallest implementation step from the current code.',
+    tradeoffs:'Still a single dense list; the shopping list is at the bottom of the Route tab rather than beside it. 700 x 470 is a little larger than today.',
+    effort:'S to M', fixes:['Six-button header row -> header band (profession + skill bar + gear), real tabs, and chips that name their setting ("Resale: vendor" instead of a button whose meaning changes per tab).','Info line that truncated -> a short status at the right of the chip row plus a yellow banner only when there is something to say ("new recipe: open the profession window").','Re-plan and Search no longer share one anchor; Re-plan sits with the lock state it belongs to.','Route sections ("Completed steps", "Recipes to learn", "Shopping list") are section bands with their totals on the right, not rows pretending to be headers; "make" rows hang off their step with a rail and a pill instead of six spaces of indentation.','Cards grew to 56 px and show the delta beside the label; selected is a gold frame, not a 2 px edge texture.','Profession is a dropdown (UIDropDownMenu or own menu) instead of a click-to-cycle button.'] },
+  b:{ name:'B · Workbench', one:'Two panes: the plan on the left, the thing you are looking at on the right.',
+    tokens:{bg:'#0b0e11',panel:'#131a1f',panel2:'#1a2329',border:'#3b4b54',text:'#e6e9e8',dim:'#8d9a9c',accent:'#c9a24a'},
+    type:'Same game fonts. Step cards 30 + 20n px tall with the skill range in a 54 px rail. Detail pane uses label/value pairs (GameTooltip-style AddDoubleLine, but in a frame you can keep open). Spacing 4 / 8 / 12; comparison strip 36 px.',
+    why:'The route is the heart of Margin, and a route is a sequence of decisions, each with reagents, odds and a shopping impact. Hover tooltips hide that behind the mouse. The Workbench shows the selected step’s full breakdown and the live shopping list at all times, so you read the plan on the left and act on the right. The four comparison cards become a slim strip you glance at rather than a block you scroll past. Profit and Leveling use the same two panes: list left, recipe breakdown and the view’s own controls right.',
+    suits:'Players who plan at the profession window with the AH open, and anyone who wants the shopping list visible while reading the route.',
+    tradeoffs:'Widest window (860 x 540) and the most new layout code: two scroll regions and a detail renderer. Below 1600 px screens it covers a lot.',
+    effort:'M to L', fixes:['Hover-only recipe tooltip -> persistent detail pane (the tooltip stays for quick looks).','Shopping list is beside the route instead of below it; have/need shown as a thin bar, so a glance tells you what is still open.','Steps are cards with a numbered rail; a step’s "make" rows are indented inside the card, so a long route reads as 6 steps, not 20 rows.','Per-view controls (Sell at, Recipes, Show / Resale, Odds) live with the view instead of in the global header.','Comparison strip: 36 px, four segments, label + delta on one line, value on the next.'] },
+  c:{ name:'C · Tracker', one:'A narrow checklist you keep open while you play; the analysis is one click away.',
+    tokens:{bg:'#09090b',panel:'#121214',panel2:'#1b1b1f',border:'#3d352c',text:'#f1ece0',dim:'#938c7e',accent:'#f0b429'},
+    type:'Same game fonts. "Now" step name 15 Friz Quadrata; everything else 12 to 13. Checklist rows 18 to 22 px with a 13 px checkbox texture. Width 320 fixed, height follows content up to 520.',
+    why:'Most of the time you are not analysing, you are doing: craft this, buy that, learn the next recipe. The Tracker leads with the one step that matters now, its prep crafts and the materials it needs as a checklist, then the next steps and the shopping list in order. The four cards collapse into one line ("priced with resale: vendor, -74g") with a popover to switch, and a one-line hint when another option would save money. At the AH and at vendors the same window docks beside the game frame, so there is one Margin window, not three. "Expand" opens the full Ledger window for sorting and comparing.',
+    suits:'ADHD-friendly: one obvious next action, low clutter, ticks you can see. Players who level while questing or waiting for queues.',
+    tradeoffs:'Profit and Leveling are cramped at 320 px (two-line rows, two sortable columns). Needs the Ledger window as its "Expand" target, so it is a second layout, not a replacement.',
+    effort:'M (Tracker) + S (reuse Ledger for Expand)', fixes:['Everything above the fold is about the current step; the long route is a "Next" list, so 20 rows never compete with the action.','The "unpriced" and shopping companions are the same window docked, so a user learns one layout.','Cards -> one summary line with a popover; the better option is offered as a sentence with a button, not four numbers to compare.','Checklist ticks for prep crafts and materials (prep ticks are local UI state; material ticks come from your bags, like today’s "have enough").'] },
+};
+
+/* ---------------- page rendering ---------------- */
+function tokPanel(d){ const t=d.tokens; const names={bg:'background',panel:'panel',panel2:'panel 2 / raised',border:'border',text:'text',dim:'dim text',accent:'accent'}; return `<aside class="tokens"><h3>Design tokens</h3><div class="tokgrid">${Object.entries(t).map(([k,v])=>`<div class="tok"><i style="background:${v}"></i><div><b>${names[k]}</b><br><code>${v}</code></div></div>`).join('')}${SHARED_TOKENS.map(([k,l,v])=>`<div class="tok"><i style="background:${v}"></i><div><b>${l}</b><br><code>${v}</code></div></div>`).join('')}</div><div class="typ"><b>Type and spacing.</b> ${d.type}</div></aside>`; }
+function stage(title,blurb,framesHTML,extra=''){ return `<section class="stage"><header><h2>${title}</h2>${blurb?`<p>${blurb}</p>`:''}</header><div class="stagebody"><div class="frames">${framesHTML}</div></div>${extra}</section>`; }
+const fr=(html,cap,w,h)=>`<div class="frame" data-w="${w}" data-h="${h}">${html}${cap?`<div class="cap">${cap}</div>`:''}</div>`;
+function renderDir(key){ const d=DIRS[key]; const win=key==='a'?winA:(key==='b'?winB:winC); const W=key==='a'?700:(key==='b'?860:320); const H=key==='a'?470:(key==='b'?540:520);
+  const settingsFrame=(()=>{ const saved=S.settings; S.settings=true; const h=key==='a'?winA({h:350}):(key==='b'?winB({h:340}):winC({h:440})); S.settings=saved; return h; })();
+  const warnFrame=(()=>{ const saved=S.tab, savedS=S.settings; S.tab='profit'; S.settings=false; const h=key==='a'?winA({h:300,warn:'New recipe learned: open the profession window to refresh.',noSettings:true}):(key==='b'?winB({h:320,warn:'Recipes: all needs the profession window open once to load every recipe.',noSettings:true}):winC({h:360,warn:'New recipe learned: open the profession window to refresh.',noSettings:true})); S.tab=saved; S.settings=savedS; return h; })();
+  const errVendor=vendorPopup({h:300,err:'The game blocked selling from an addon here, so nothing was sold. Right-click the items to sell them yourself.'});
+  return `<article class="dir ${S.dir===key?'on':''}" id="dir-${key}" style="--w-bg:${d.tokens.bg};--w-panel:${d.tokens.panel};--w-panel2:${d.tokens.panel2};--w-border:${d.tokens.border};--w-text:${d.tokens.text};--w-dim:${d.tokens.dim};--w-accent:${d.tokens.accent}">
+    <div class="intro"><div class="text"><h2 style="font-size:24px">${d.name}</h2><p style="color:var(--muted);font-size:16px">${d.one}</p><p>${d.why}</p><dl class="kv"><dt>Suits</dt><dd>${d.suits}</dd><dt>Trade-offs</dt><dd>${d.tradeoffs}</dd><dt>Effort</dt><dd>${d.effort}</dd></dl></div>${tokPanel(d)}</div>
+    ${stage('Main window',key==='c'?'The Tracker is the main window. Route is a checklist led by the current step; Profit and Leveling are compact lists. Expand opens the Ledger window for full analysis.':'All three tabs are live: switch tabs, click a column header to sort (right-click resets), click a card to re-price the route, expand Completed steps, hover a row for its tooltip.',fr(win(),`${W} x ${H}, movable, closes on Escape (UISpecialFrames)`,W,H),`<ul class="fixes">${d.fixes.map(f=>`<li>${f}</li>`).join('')}</ul>`)}
+    ${stage('Settings','Every scattered option in one place. Changing a planning option re-locks the route, as today. Slash commands remain as shortcuts.',fr(settingsFrame,'Settings panel inside the window (a child frame, not a Blizzard options category, so it works on Forever)',W,key==='a'?350:(key==='b'?340:440)))}
+    ${stage('Auction house companion','One control strip on the AH top edge, left-aligned so the width of "N unpriced" never pushes anything around. Click the unpriced button to see its running state. The shopping list groups by where to buy.',fr(`<div style="display:flex;flex-direction:column;gap:6px;align-items:flex-start">${ahStrip()}<div style="display:flex;gap:6px;align-items:flex-start">${gameAH()}${ahPopup(key)}</div></div>`,'Strip anchors BOTTOMLEFT to the AH TOPLEFT; the list docks TOPLEFT to the AH TOPRIGHT',700,430))}
+    ${stage('Vendor companion','Buy and Sell as a segmented control; the "Don’t bother with the AH" checkbox moves under Sell all, where it applies. Sell needs two clicks: try it.',fr(`<div style="display:flex;gap:6px;align-items:flex-start">${gameVendor()}${vendorPopup()}</div>`,'Docks TOPLEFT to the MerchantFrame TOPRIGHT',620,400)+fr(errVendor,'Blocked state: ADDON_ACTION_FORBIDDEN, shown in the window instead of only in chat',360,300))}
+    ${stage('Profession window','The Margin button keeps its placement logic (first free spot of four). A one-line summary under the selected recipe is <span class="tag prop">proposed</span>: cost, sale, profit and the route step, using the same formatter as the window.',fr(profWindow(),'ProfessionsFrame with the button beside Close and the proposed summary line',520,230))}
+    ${stage('States','Empty, unpriced/loading, a warning banner, and a long list with search.',fr(emptyState(key),'No profession scanned yet',key==='c'?320:(key==='b'?520:460),260)+fr(unpricedState(key),'Unpriced reagents and names still loading',key==='c'?320:460,200)+fr(warnFrame,'Warning banner (replaces the truncating info line)',W,key==='a'?300:(key==='b'?320:360))+fr(longList(key),'Long list: 57 rows, search active',key==='c'?320:460,240)+fr(tooltipState(),'Recipe tooltip (GameTooltip, AddDoubleLine)',270,200)+fr(prepTooltip(),'"make" row tooltip',270,140))}
+  </article>`; }
+function render(){ const main=document.getElementById('main'); const scroll=window.scrollY; main.innerHTML=['a','b','c'].map(renderDir).join(''); document.querySelectorAll('#dirseg button').forEach(b=>b.classList.toggle('on',b.dataset.v===S.dir)); fit(); window.scrollTo(0,scroll); }
+function fit(){ for(const f of document.querySelectorAll('.frame')){ const w=+f.dataset.w, h=+f.dataset.h; const inner=f.firstElementChild; const stage=f.closest('.stagebody'); const avail=stage?stage.clientWidth:w; const s=Math.min(1,Math.max(0.55,avail/w)); inner.style.transform=`scale(${s})`; f.style.width=(w*s)+'px'; f.style.height=(h*s)+'px'; } }
+window.addEventListener('resize',()=>fit());
+
+/* ---------------- interactions ---------------- */
+let runTimer=null, armTimer=null;
+document.addEventListener('click',e=>{ const el=e.target.closest('[data-act]'); if(!el) return; const a=el.dataset.act, v=el.dataset.v, k=el.dataset.k;
+  if(a==='dir'){ S.dir=v; S.settings=false; S.cmpOpen=false; location.hash=({a:'ledger',b:'workbench',c:'tracker'})[v]; render(); return; }
+  if(a==='tab'){ S.tab=v; S.sortCol=null; S.selStep=0; }
+  else if(a==='sort'){ const c=+el.dataset.col; if(S.sortCol===c) S.sortAsc=!S.sortAsc; else { S.sortCol=c; S.sortAsc=(c===1||c===2||(c===4&&S.tab==='level')); } }
+  else if(a==='card'){ if(v==='alt') S.useTrainer=!S.useTrainer; else S.resale=v; S.cmpOpen=false; S.selStep=0; }
+  else if(a==='history'){ S.showHistory=!S.showHistory; }
+  else if(a==='replan'){ PROF.lockedOn='just now'; }
+  else if(a==='settings'){ S.settings=!S.settings; }
+  else if(a==='set'){ S[k]=(v==='true'?true:(v==='false'?false:v)); }
+  else if(a==='chk'){ S[k]=!S[k]; e.preventDefault(); }
+  else if(a==='cycle'){ const cyc={sellKey:['vendor','ah'],scope:['known','all'],showAll:[true,false],resale:['vendor','ah','off'],odds:['worst','typical'],useTrainer:[true,false]}[k]; const i=cyc.indexOf(S[k]); S[k]=cyc[(i+1)%cyc.length]; }
+  else if(a==='selstep'){ S.selStep=+el.dataset.i; }
+  else if(a==='cmp'){ if(e.target.closest('.cmppop')) return; S.cmpOpen=!S.cmpOpen; }
+  else if(a==='tick'){ S[k]=!S[k]; }
+  else if(a==='vtab'){ S.vendTab=v; S.armed=null; S.soldMsg=null; }
+  else if(a==='sell'||a==='sellall'){ const key=a==='sell'?k:'all'; clearTimeout(armTimer); if(S.armed===key){ if(key==='all'){ for(const n of ['Barbaric Shoulders',"Hillman's Belt"]) if(S.sellAllVendor||n!=='Barbaric Shoulders') S.sold[n]=99; S.soldMsg='Sold crafted items.'; } else { S.sold[key]=99; S.soldMsg=`Sold ${key==='Barbaric Shoulders'?5:9} crafted items.`; } S.armed=null; } else { S.armed=key; armTimer=setTimeout(()=>{ S.armed=null; render(); },6000); } }
+  else if(a==='buy'){ S.bought[k]=(S.bought[k]||0)+99999; }
+  else if(a==='buyall'){ for(const n of ['Salt','Fine Thread','Silken Thread']) S.bought[n]=(S.bought[n]||0)+99999; }
+  else if(a==='search'){ S.bought[k]=(S.bought[k]||0)+Math.ceil((shopFor(cards().find(c=>c.selected).plan).rows.find(r=>r.name===k)||{buy:0}).buy/2); }
+  else if(a==='unpriced'){ if(S.running){ S.running=false; clearInterval(runTimer); } else { S.running=true; S.left=S.unpriced; clearInterval(runTimer); runTimer=setInterval(()=>{ S.left=Math.max(0,S.left-3); S.unpriced=S.left; if(S.left===0){ S.running=false; clearInterval(runTimer); } render(); },900); } }
+  else if(a==='scanprof'){ const o=['Leatherworking','Cooking','First Aid','all']; S.scanProf=o[(o.indexOf(S.scanProf)+1)%o.length]; }
+  else if(a==='prof'){ return; }
+  render(); });
+document.addEventListener('contextmenu',e=>{ const el=e.target.closest('[data-act="sort"]'); if(el){ e.preventDefault(); S.sortCol=null; render(); } });
+// hover tooltips inside the frames (one floating tooltip per window, like GameTooltip ANCHOR_RIGHT)
+document.addEventListener('mouseover',e=>{ const row=e.target.closest('[data-tip],[data-tipprep],[data-tiplearn]'); document.querySelectorAll('.wow .tip.live').forEach(t=>t.remove()); if(!row) return; const win=row.closest('.wow'); if(!win) return; let html; if(row.dataset.tip){ const r=R[row.dataset.tip]; if(!r) return; html=tipFor(r); } else if(row.dataset.tipprep){ const [n,units,f,have]=row.dataset.tipprep.split('|'); html=`<h4>${n}</h4><div class="ln"><span>${units} needed for ${f}; making them costs less than buying them.</span></div>${+have>0?`<div class="ln" style="color:var(--profit)">You already hold ${have}, so only ${units-have} are left to make.</div>`:''}<div class="mute" style="margin-top:4px">Do this before the step below.</div><div class="hint">Click: open it in the profession window.</div>`; } else { const r=R[row.dataset.tiplearn]; html=`<h4>${esc(r.name)}</h4><div class="ln"><span>${r.learn.how==='trainer'?'trainer':'buy the pattern on the AH'}: ${plain(r.learn.fee)}, requires ${r.rank} skill.</span></div><div class="mute" style="margin-top:4px">${r.learn.how==='trainer'?'Forever trainer data (EG Link); not every trainer is listed.':'Recipe item: '+esc(r.learn.item)}</div>`; }
+  const t=document.createElement('div'); t.className='tip live'; t.innerHTML=html; win.appendChild(t); const wr=win.getBoundingClientRect(), rr=row.getBoundingClientRect(); const scale=wr.width/win.offsetWidth; let left=(rr.right-wr.left)/scale-260, top=(rr.top-wr.top)/scale+22; if(top+150>win.offsetHeight) top=Math.max(26,win.offsetHeight-160); t.style.left=Math.max(4,left)+'px'; t.style.top=top+'px'; });
+// hash routing between directions
+function fromHash(){ const m={ledger:'a',workbench:'b',tracker:'c'}[location.hash.replace('#','')]; if(m) S.dir=m; }
+window.addEventListener('hashchange',()=>{ fromHash(); render(); });
+fromHash(); render();
+</script>
