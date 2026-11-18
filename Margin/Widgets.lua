@@ -366,6 +366,7 @@ local function editBox(parent, width, height)
   local e = CreateFrame("EditBox", nil, parent)
   e:SetSize(width, height or 20)
   e:SetAutoFocus(false)
+  e:EnableMouse(true)
   local fo = T.Font("small")
   if fo then e:SetFontObject(fo) end
   e.bg = W.Solid(e, "black")

@@ -413,4 +413,81 @@ do
   ns.Owned = function() return 0 end
   MarginDB = nil
 end
+-- view model and money formatting (Theme.lua, ViewModel.lua): pure, no frames
+assert(loadfile("Margin/Theme.lua"))("Margin", ns)
+assert(loadfile("Margin/ViewModel.lua"))("Margin", ns)
+local function strip(s) return (s:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")) end
+assert(strip(ns.Money(12345)) == "1g 23s 45c", strip(ns.Money(12345)))
+assert(strip(ns.Money(5)) == "5c" and ns.Money(nil) == "?")
+assert(strip(ns.Signed(-50)) == "-50c" and strip(ns.Signed(250)) == "+2s 50c" and strip(ns.Signed(0)) == "0c")
+assert(ns.T.hex.profit == "6ee86e" and ns.Signed(1):find("|cff6ee86e+|r", 1, true), "green + for a profit")
+assert(ns.Signed(-1):find("|cffff6b6b-|r", 1, true), "red - for a loss")
+assert(ns.PlainMoney(10203) == "1g 2s 3c" and ns.PlainMoney(-99) == "99c")
+ns.T.Set("classic")
+assert(ns.T.hex.profit == "60ff60" and ns.T.hex.bg ~= nil, "classic palette")
+ns.T.Set("ledger")
+assert(ns.T.hex.bg == "0e0d10" and ns.T.hex.accent == "d9b24c")
+
+-- comparison cards: delta is how much better (+) or worse (-) off than the selected option
+local function fakePlan(cost, learnCost, crafts) return { cost = cost, learnCost = learnCost or 0, crafts = crafts or 10, segs = {}, shop = {}, learn = {} } end
+local plans = { vendor = fakePlan(5000), ah = fakePlan(3000), off = fakePlan(9000) }
+local cards, selCard = ns.VM.Cards("vendor", true,
+  function(m, t) if t == false then return fakePlan(5000, 0) end return plans[m] end,
+  function() return plans.vendor end)
+assert(#cards == 4 and selCard.key == "vendor" and cards[1].deltaKind == "selected")
+assert(cards[2].deltaKind == "better" and cards[2].diff == -2000, "AH resale costs less: green +")
+assert(cards[3].deltaKind == "worse" and cards[3].diff == 4000, "no resale costs more: red -")
+assert(cards[4].key == "alt" and cards[4].deltaKind == "same" and cards[4].label == "Learned only" and cards[4].useTrainer == false)
+
+-- recipe entries: raw values, learn hint, unpriced, makes no item, sorting with blanks last
+ns.ItemName = function(id) return "item " .. id end
+resaleMode = "vendor"
+local re = ns.VM.RecipeEntry({ r = { id = 1, name = "Boots", out = 9, qty = 1, diff = 0, train = { rank = 170, fee = 500 } },
+  cost = 140, missing = 0, lines = {}, vendorProfit = 160, ahProfit = 810, learn = { rank = 170, fee = 500, how = "trainer" } },
+  "profit", "ah", 160, "Leatherworking")
+assert(re.kind == "recipe" and re.unlearned and re.learn.togo == 10 and re.value == 810 and re.sale == 950 and re.quote)
+local nothing = ns.VM.RecipeEntry({ r = { id = 2, name = "Kit", qty = 1, diff = 1 }, cost = 50, missing = 0, lines = {} }, "profit", "vendor", 160)
+assert(nothing.valueNote == "makes no item" and nothing.value == nil)
+local unp = ns.VM.RecipeEntry({ r = { id = 3, name = "Cap", out = 9, qty = 1, diff = 1 }, cost = 0, missing = 2, lines = {}, perUp = 5 }, "level", "vendor", 160)
+assert(unp.missing == 2 and unp.cost == nil and unp.value == nil and unp.quote == nil)
+local sorted = ns.VM.Sort({ { sortCost = 5 }, { sortCost = nil }, { sortCost = 1 } }, 2, true)
+assert(sorted[1].sortCost == 1 and sorted[2].sortCost == 5 and sorted[3].sortCost == nil)
+
+-- route entries: sections in order, prep rows before their step, gaps, learning, the shopping list
+ns.Owned = function(id) return id == 1 and 3 or 0 end
+ns.Supply = function(id) return id == 2 and 4 or nil end
+ns.WalkCost = function(id, n) if id == 2 then return n * 60 end end
+local rp = {
+  target = 30, cost = 900, learnCost = 50, crafts = 12,
+  segs = {
+    { from = 10, to = 20, crafts = 9.2, cost = 800, row = { r = { id = 7, name = "Belt", icon = "i", diff = 0 }, cost = 90 },
+      prep = { { recipe = { id = 8, name = "Strap", icon = "j", qty = 1 }, crafts = 2, units = 2, have = 1, unit = 15 },
+               { recipe = { id = 9, name = "Buckle", icon = "k", qty = 1 }, crafts = 0, units = 0, have = 4 } } },
+    { gap = true, from = 20, to = 22, crafts = 0, cost = 0 },
+    { from = 22, to = 30, crafts = 3, cost = 100, row = { r = { id = 10, name = "Cloak", icon = "c", diff = 1 }, cost = 30, learn = { rank = 22, fee = 50, how = "trainer" } }, prep = {} },
+  },
+  learn = { { row = { r = { id = 10, name = "Cloak", icon = "c" } }, rank = 22, fee = 50, how = "trainer" } },
+  shop = { { item = 1, count = 5, unit = 10, src = "vendor" }, { item = 2, count = 10, unit = 50, src = "ah" } },
+}
+local hist = { { t = 1, from = 5, to = 10, name = "Strap", crafts = 4, cost = 70 } }
+local list = ns.VM.RouteEntries(rp, { profName = "LW", history = hist, showHistory = false, stock = {} })
+local seq = {}
+for _, e in ipairs(list) do seq[#seq + 1] = e.kind == "section" and ("[" .. e.key .. "]") or e.kind end
+assert(table.concat(seq, " ") == "[history] [steps] prep prep step gap step [learn] learn [shop] shop shop", table.concat(seq, " "))
+assert(list[1].total == 70 and list[1].collapsible and not list[1].open)
+assert(list[2].total == -900 and list[2].signed, "steps total is the net, signed")
+assert(list[3].mode == "make" and list[3].have == 1 and list[3].craft.count == 2 and list[4].mode == "have")
+assert(list[5].crafts == 10 and list[5].net == -800 and not list[5].learn and list[7].learn and list[7].craft.learnFirst)
+local s1, s2 = list[#list - 1], list[#list]
+assert(s1.have == 3 and s1.buy == 2 and s1.cost == 20, "have counts, vendor cost is unit x buy")
+assert(s2.buy == 10 and s2.short == 6 and s2.cost == 600, "AH: walked cost, short of supply")
+assert(list[#list - 2].total == 620, "still to buy")
+assert(#ns.VM.RouteEntries(rp, { history = hist, showHistory = true, stock = {} }) == #list + 1, "expanded history")
+assert(ns.VM.Status("route", nil, 30) == "route to 30")
+assert(ns.VM.Status("profit", { recipes = 19, priced = 18, shown = 19 }) == "19 recipes · 18 priced · 19 shown")
+assert(ns.VM.Warnings("route", {}, { plan = rp }):find("2 skill points have no priced recipe", 1, true))
+assert(ns.VM.Warnings("profit", {}, { counts = { unpriced = 0 } }) == nil)
+ns.Owned = function() return 0 end
+ns.Supply, ns.WalkCost, ns.ItemName = nil, nil, nil
+resaleMode = "off"
 print("calc ok")
