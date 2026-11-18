@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- **New window: the Ledger.** Same three tabs, clearer layout (docs/ui-redesign/DESIGN.md, direction A): a header band with a profession dropdown, a skill bar and a Settings gear; underline tabs with the search box (Profit, Leveling) or the lock state and Re-plan (Route) at the right; one row of chips naming the settings the tab uses ("Resale: vendor", "Odds: worst case", ...), click to change; a short status at the right; warnings in a banner that wraps instead of a line that got cut off. The Route tab has larger comparison cards (selected = gold frame, green + / red - for how much better or worse each option is) and one list with real section bands: Crafted stock and Completed steps (both collapsible), Steps with the net total, Recipes to learn, Shopping list; prep crafts hang off their step with a make / have tag, recipes to learn carry a learn tag. Leveling's middle column now shows the resale value the net is computed with.
+- **Settings panel** (the gear): every option in one place, in four groups (Planning, Prices, Lists, Companions) plus the window layout. "My reputation" moved there from the title bar. Slash commands keep working.
+- **Themes.** `/margin theme ledger` (default) or `/margin theme classic` switches the main window, live; the old window stays available as `classic` until the Ledger has proved itself. The companions follow the chosen palette.
+- **Auction house:** the three buttons are now one Margin strip on the top edge of the AH: Scan filter, Full scan, Shopping list (with how many items are still to buy) and the lookup ("14 unpriced · Look up", "Looking up · 11 left · Stop"). Segments have fixed widths, so nothing moves while it runs. Right-click and shift-click on the lookup work as before and the tooltip says so.
+- **Shopping list:** grouped into Auction house, Vendor and Done with totals, a have / need bar per item and "Search n".
+- **Vendor popup:** "Buy for the route" / "Sell crafted items" as a segmented control; "Sure?" shows as an armed (red) button; a blocked sale, a stopped purchase and "Sold n" show in the window, not only in chat.
+- The profession window button and the craft planner use the same look.
+- Fixed: `/margin report` called a function that does not exist.
+- Development: the UI is now a theme (tokens, fonts, money formatting), a widget kit, a registry of layouts, tabs, chips, columns and settings, and a view model that turns the planner's data into list rows (unit-tested). A UI smoke test (`tests/ui_smoke.lua`, in CI) builds and clicks through every window in a stubbed WoW API.
+
 - **Craft planner.** Click a recipe on the Profit tab: choose how many to craft (type it, +/-, 5/10/25, or Max for what you hold) and see what to make first, what to buy (after what you hold, with AH shortages flagged), what you pay now, the full cost, what it sells for and the net profit at vendor and AH prices. A button opens the recipe in the profession window with that many.
 
 - Route tab: a "Crafted stock" row at the top shows what the route has made and you are holding, worth what at a vendor and on the AH (after the cut and the lost-deposit risk); click it for the items. It never includes anything a later step uses as a reagent.

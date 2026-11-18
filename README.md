@@ -16,13 +16,18 @@ Updates are new releases. Type `/margin` in game, or use the Margin button on a 
 - **Route tab:** the cheapest path from your skill to your target, with a shopping list and cards that compare the route under each pricing option. It can include recipes you have not learned yet (trainer recipes and patterns you can buy).
 - **At the auction house:** a shopping list with one-click Search that fills in the quantity, a "to look up" button that searches only the items Margin needs (unpriced ones, and the route's items whose supply it hasn't seen), and purchases ticked off as the AH confirms them.
 - **At a vendor:** buy everything the route still needs (never more than needed), and sell the route's crafted items.
-- Click a Route row to open that recipe in the profession window with the craft count filled in.
+- Click a Route or Leveling row to open that recipe in the profession window with the craft count filled in; click a Profit row to plan a craft run.
+
+## The window
+
+The default layout is the **Ledger**: profession dropdown and skill bar at the top, Profit / Leveling / Route tabs, a row of chips for the settings the tab uses (click a chip to change it), and a gear for the Settings panel with every option. `/margin theme classic` brings back the previous window; `/margin theme ledger` returns to the new one. Both switch without a reload.
 
 ## Settings
 
 | Command | Does |
 |---|---|
 | `/margin` | open the window |
+| `/margin theme ledger` | window layout: `ledger` (default) or `classic` (the previous window) |
 | `/margin route 140` | set the route's target skill |
 | `/margin rep` | toggle "My reputation" (default off: base, worst-case prices) |
 | `/margin cut 5` | AH cut in percent |
@@ -44,6 +49,6 @@ Bundled data and where it comes from is in [THIRD_PARTY.md](THIRD_PARTY.md); the
 
 ## Development
 
-`lua5.1 tests/calc_test.lua` runs the offline tests; CI also syntax-checks every file. Pushing a tag like `v0.2.0` builds the zip and publishes a release (tags containing `-beta` or `-rc` are marked pre-releases; everything else is a normal release, which is what addon managers follow). Release notes come from `CHANGELOG.md`.
+`lua5.1 tests/calc_test.lua` runs the offline tests (planner, prices, view model); `lua5.1 tests/ui_smoke.lua` builds and clicks through every window in a stubbed WoW API; `tools/ci_local.sh` runs everything CI runs. The UI is layered: `Theme.lua` (tokens, fonts, money), `Widgets.lua` (the kit), `Registry.lua` (layouts, tabs, chips, columns, settings), `ViewModel.lua` (rows and cards from the planner's data), `Options.lua` (the registrations), and one file per layout (`Ledger.lua`, `UI.lua` = classic). A new layout registers itself with `ns.Layouts.register(name, { build, refresh, show, hide, isShown, scrollTop, palette })`. Pushing a tag like `v0.2.0` builds the zip and publishes a release (tags containing `-beta` or `-rc` are marked pre-releases; everything else is a normal release, which is what addon managers follow). Release notes come from `CHANGELOG.md`.
 
 MIT licensed.

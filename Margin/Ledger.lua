@@ -253,6 +253,7 @@ local function fillRow(row, e)
   end
   row.name:ClearAllPoints()
   row.name:SetPoint("LEFT", nx, 0)
+  row.name:SetWidth(0) -- unconstrained, so the text can be measured
   row.name:SetText(name)
   if pill and pillAfter then
     row.pill:SetKind(pill)
