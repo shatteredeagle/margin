@@ -7,6 +7,18 @@ local _, ns = ...
 local API = "Margin"
 local WEEK = 7 * 86400
 
+-- Ask the game to load an item's data, but only once a minute per item. Asking on every call made each answer
+-- (GET_ITEM_INFO_RECEIVED) trigger another redraw, and an item that does not exist in Forever never loads, so
+-- the window redrew itself in a loop.
+local asked = {}
+local function requestOnce(itemID)
+  local last = asked[itemID]
+  if not last or GetTime() - last > 60 then
+    asked[itemID] = GetTime()
+    C_Item.RequestLoadItemDataByID(itemID)
+  end
+end
+
 local function auctionator()
   return Auctionator and Auctionator.API and Auctionator.API.v1
 end
@@ -86,7 +98,7 @@ end
 -- Vendor sell price (what a merchant pays you). Item data may not be loaded yet.
 function ns.VendorSell(itemID)
   local _, _, _, _, _, _, _, _, _, _, sell = C_Item.GetItemInfo(itemID)
-  if sell == nil then C_Item.RequestLoadItemDataByID(itemID) end
+  if sell == nil then requestOnce(itemID) end
   return sell
 end
 
@@ -122,4 +134,12 @@ function ns.ItemExists(itemID)
     if ok then return got ~= nil end
   end
   return true -- cannot tell: assume it does
+end
+
+-- An item's name, or nil while the game has not given it (asked for at most once a minute).
+function ns.ItemName(itemID)
+  local n = C_Item.GetItemNameByID(itemID)
+  if n then return n end
+  requestOnce(itemID)
+  return nil
 end

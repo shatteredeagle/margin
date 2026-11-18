@@ -18,9 +18,7 @@ local function signed(p)
 end
 
 local function itemName(id)
-  local n = C_Item.GetItemNameByID(id)
-  if not n then C_Item.RequestLoadItemDataByID(id) end
-  return n or ("item " .. id)
+  return ns.ItemName(id) or ("item " .. id)
 end
 
 local function setQty(n)

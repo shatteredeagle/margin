@@ -52,9 +52,7 @@ local function plainMoney(c)
 end
 
 local function itemName(id)
-  local n = C_Item.GetItemNameByID(id)
-  if not n then C_Item.RequestLoadItemDataByID(id) end
-  return n or ("item " .. id)
+  return ns.ItemName(id) or ("item " .. id)
 end
 
 local function setOffset(v, scrolling)
@@ -923,12 +921,18 @@ function ns.ToggleUI()
   if frame:IsShown() then frame:Hide() else frame:Show(); ns.RefreshUI() end
 end
 
--- Item names arrive asynchronously; redraw once they have.
+-- Item names arrive asynchronously; redraw once they have. This only rebuilds the text: it must not throw the
+-- planned routes away (ns.RefreshUI does), or every name that loads would re-plan everything.
+function ns.RedrawUI()
+  cache = nil
+  if redraw then redraw() end
+end
+
 local loader = CreateFrame("Frame")
 loader:RegisterEvent("GET_ITEM_INFO_RECEIVED")
 local queued
 loader:SetScript("OnEvent", function()
   if queued or not (frame and frame:IsShown()) then return end
   queued = true
-  C_Timer.After(0.3, function() queued = nil; ns.RefreshUI() end)
+  C_Timer.After(0.5, function() queued = nil; ns.RedrawUI() end)
 end)

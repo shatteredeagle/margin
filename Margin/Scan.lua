@@ -186,6 +186,7 @@ f:RegisterEvent("TRADE_SKILL_LIST_UPDATE")
 f:RegisterEvent("TRADE_SKILL_SHOW")
 f:SetScript("OnEvent", function(_, event)
   if event == "TRADE_SKILL_SHOW" then
+    ns.rescanTries = 0
     -- what the client reports the moment a profession window opens (First Aid, Cooking, ...)
     MarginDB.scanLog = MarginDB.scanLog or {}
     local base = T.GetBaseProfessionInfo and T.GetBaseProfessionInfo()
@@ -205,7 +206,9 @@ local loader = CreateFrame("Frame")
 loader:RegisterEvent("GET_ITEM_INFO_RECEIVED")
 local queued
 loader:SetScript("OnEvent", function()
-  if not ns.needRescan or queued then return end
+  -- a recipe item the game can never give a tooltip for would keep this asking for ever: three tries per window
+  if not ns.needRescan or queued or (ns.rescanTries or 0) >= 3 then return end
+  ns.rescanTries = (ns.rescanTries or 0) + 1
   queued = true
   C_Timer.After(1.5, function() queued = nil; ns.needRescan = false; ns.Scan(false) end)
 end)

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Fixed: lag when opening the Route tab.** Item names the game had not loaded were asked for again on every redraw, each answer triggered another redraw, and that redraw threw away the planned routes and planned them again. For items the game can never name this never stopped. Names are now requested once a minute at most, a name arriving only rebuilds the text (the routes stay cached), and rescanning a profession for missing recipe-item data stops after three tries per window. `tests/bench_plan.lua` times the planner on realistic data.
+
+## Unreleased
+
 - Fixed: selecting a recipe in the profession window was called from a timer, which the game blocks for this protected function (that is why it only worked sometimes). The recipe is now selected directly in your click; the timer only waits for the window and fills in the number. If the window opens on another recipe it says so, and one more click selects it.
 
 ## Unreleased

@@ -468,9 +468,7 @@ function ns.RefreshMerchant()
     row.data = r
     if r then
       row.icon:SetTexture(C_Item.GetItemIconByID(r.item))
-      local n = C_Item.GetItemNameByID(r.item)
-      if not n then C_Item.RequestLoadItemDataByID(r.item) end
-      row.name:SetText(n or ("item " .. r.item))
+      row.name:SetText(ns.ItemName(r.item) or ("item " .. r.item))
       if r.sell then
         row.sub:SetText(("%d in bags  -  %s  (step %s)%s"):format(r.count, ns.Money(r.value), table.concat(r.steps, ", "),
           r.ahBetter and ("  |cffffd070AH ~%s each|r"):format(ns.Money(r.ahNet)) or ""))

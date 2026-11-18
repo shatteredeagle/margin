@@ -272,9 +272,7 @@ function ns.RefreshShopping()
     row.data = d
     if d then
       row.icon:SetTexture(C_Item.GetItemIconByID(d.item))
-      local n = C_Item.GetItemNameByID(d.item)
-      if not n then C_Item.RequestLoadItemDataByID(d.item) end
-      row.name:SetText(n or ("item " .. d.item))
+      row.name:SetText(ns.ItemName(d.item) or ("item " .. d.item))
       local mail = d.transit > 0 and ("  |cff80c0ff(+%d on the way)|r"):format(d.transit) or ""
       if d.kind == "done" then
         row.sub:SetText(("|cff60ff60done|r  need %d, have %d%s"):format(d.need, d.have, mail))
