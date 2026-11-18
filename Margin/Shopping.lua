@@ -162,7 +162,7 @@ end
 local function compute()
   list = {}
   local plan = ns.CurrentPlan()
-  if not plan then return 0 end
+  if not plan and not (ns.S.shopOnCraft and ns.S.shopCraft) then return 0 end
   local cost = 0
   for _, it in ipairs((ns.ShopOf(plan))) do
     local transit = ns.Transit(it.item)
@@ -273,7 +273,7 @@ local function build()
   frame.step = W.Button(head, { width = 130, height = 20, text = "Whole route",
     onClick = function()
       local plan = ns.CurrentPlan()
-      if plan then ns.CycleShopStep(plan) end
+      if plan or ns.S.shopCraft then ns.CycleShopStep(plan or { segs = {} }) end -- (the craft plan works without a route)
       ns.RefreshUI()
     end,
     tooltip = { "Shop for one step", "Cannot afford everything at once? Pick a step to see only what it needs: buy that, craft, sell, then pick the next step. Click again to move on; after the last step it shows the whole route." } })
@@ -308,8 +308,8 @@ function ns.RefreshShopping()
   frame.left:SetText(prof and (T.C("dim", "still to buy ") .. T.Money(cost)) or "")
   do
     local plan = ns.CurrentPlan()
-    local _, seg = plan and ns.ShopOf(plan)
-    frame.step.label:SetText(seg and ("Step %d-%d"):format(seg.from, seg.to) or "Whole route")
+    local _, seg, craft = ns.ShopOf(plan)
+    frame.step.label:SetText(craft and "Craft plan" or seg and ("Step %d-%d"):format(seg.from, seg.to) or "Whole route")
   end
   frame.note:SetText(frame.open and "Search fills in the count; buying is your click."
     or "Open the auction house to search.")
@@ -333,9 +333,10 @@ function ns.RefreshShopping()
   frame.list:SetEntries(entries)
 end
 
-function ns.ToggleShopping()
+function ns.ToggleShopping(forceShow)
   if not frame then build() end
-  if frame:IsShown() then frame:Hide(); return end
+  if frame:IsShown() and not forceShow then frame:Hide(); return end
+  if frame:IsShown() then return ns.RefreshShopping() end
   if ahOpen() then
     frame:SetParent(AuctionHouseFrame)
     frame:ClearAllPoints()

@@ -115,12 +115,21 @@ local function build()
     frame.rows[i] = row
   end
 
-  frame.open = W.Button(frame, { width = WIDTH - 28, height = 24, primary = true, icon = "hammer", text = "",
+  frame.shop = W.Button(frame, { width = 118, height = 24, icon = "cart", text = "Shopping list",
+    onClick = function()
+      if not (recipe and quote) then return end
+      ns.ShopForCraft(recipe, qty, quote)
+      ns.ToggleShopping(true)
+      ns.RefreshUI()
+    end,
+    tooltip = { "Shopping list for this craft", "Puts what this craft needs in the shopping list (the AH window's list, the vendor Buy tab, the AH button count). The step button in that list switches between the route, its steps and this craft plan." } })
+  frame.shop:SetPoint("BOTTOMLEFT", 14, 14)
+  frame.open = W.Button(frame, { width = WIDTH - 28 - 118 - 6, height = 24, primary = true, icon = "hammer", text = "",
     onClick = function()
       if not recipe then return end
       ns.OpenRecipe(recipe.id, qty, recipe.prof)
     end })
-  frame.open:SetPoint("BOTTOM", 0, 14)
+  frame.open:SetPoint("BOTTOMRIGHT", -14, 14)
 end
 
 function ns.RefreshQuote()
@@ -209,7 +218,7 @@ function ns.RefreshQuote()
       row:Hide()
     end
   end
-  frame.open:SetText(("Open in profession window, craft %d"):format(qty))
+  frame.open:SetText(("Craft %d in the window"):format(qty))
   frame.open:SetEnabled(not (r.train or r.teach or r.extra))
 end
 

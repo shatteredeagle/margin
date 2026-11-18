@@ -105,6 +105,11 @@ SlashCmdList.MARGIN = function(msg)
   elseif msg:match("^step") then
     -- /margin step 2 shows only the second step's shopping lists; /margin step all (or no number) the whole route
     local n = tonumber(msg:match("^step%s+(%d+)"))
+    if msg:match("^step%s+craft") and ns.S.shopCraft then
+      ns.S.shopOnCraft = true; ns.S.shopStep = nil
+      if ns.RefreshUI then ns.RefreshUI() end
+      return ns.Print(ns.ShopStepLabel({ segs = {} }))
+    end
     local plan = ns.CurrentPlan and ns.CurrentPlan()
     if not plan then return ns.Print("open a profession window once first") end
     local steps = ns.ShopSteps(plan)

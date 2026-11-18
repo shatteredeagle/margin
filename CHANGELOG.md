@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **The craft planner makes a shopping list.** A "Shopping list" button in the craft planner sends what that craft needs (after what you hold, with AH shortages flagged) to the AH shopping list, the vendor Buy tab and the AH button count. The step button in the shopping list now chooses between the whole route, each route step, and the craft plan (`/margin step craft`, `/margin step all`, `/margin step 2`); the craft plan is remembered while you switch.
+
 - **Craft counts were inflated by worst-case odds.** Worst-case planned the bottom of each colour for every level of it, so a green stretch of ten levels took 20 crafts per level all the way (a 31-level stretch came out at ~289 crafts). Worst-case odds now slide across each band, from the middle of its range down to the old worst-case number, as the real chance does, so the first levels of yellow and green are no longer treated like the last. That stretch is now ~120 crafts. Still conservative: it never plans better than the typical odds nor worse than the old bottom. "Typical" odds are unchanged.
 
 - **Shopping list by step.** When you cannot afford the whole route up front, shop one step at a time: buy what a step needs, craft, sell, then buy for the next. Click the Shopping list band on the Route tab (or the step button in the AH shopping list, or `/margin step 2`, `/margin step all`) to move through the steps; after the last one it shows the whole route again. The AH shopping list, the AH button count, the vendor Buy tab and the Route tab all follow the chosen step. A step's list includes the recipe item to buy for it. Each step's list is worked out on its own, so held stock is credited to the step that is showing.

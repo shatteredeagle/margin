@@ -648,6 +648,25 @@ assert(MarginDB.quoteQty and next(MarginDB.quoteQty) and select(2, next(MarginDB
 hover(MarginQuote.best)
 click(MarginQuote.best)
 local before = openRecipeCalls
+-- the craft plan can feed the shopping lists, and stays a choice beside the route
+do
+  click(MarginQuote.shop)
+  assert(ns.S.shopOnCraft and ns.S.shopCraft and #ns.S.shopCraft.shop > 0, "craft plan shopping list set")
+  assert(ns.ShopOf(ns.CurrentPlan()) == ns.S.shopCraft.shop, "lists follow the craft plan")
+  assert(MarginShopping and MarginShopping:IsShown(), "shopping list opened")
+  local plan = ns.CurrentPlan()
+  ns.CycleShopStep(plan) -- craft plan -> whole route
+  assert(not ns.S.shopOnCraft and ns.S.shopStep == nil and ns.ShopOf(plan) == plan.shop, "back to the whole route")
+  local steps = ns.ShopSteps(plan)
+  for _ = 1, #steps + 1 do ns.CycleShopStep(plan) end -- through every step
+  assert(ns.S.shopOnCraft, "after the last step comes the craft plan")
+  SlashCmdList.MARGIN("step all")
+  assert(not ns.S.shopOnCraft and ns.S.shopCraft, "route again; the craft plan is remembered")
+  SlashCmdList.MARGIN("step craft")
+  assert(ns.S.shopOnCraft, "/margin step craft")
+  ns.CycleShopStep(plan)
+  MarginShopping:Hide()
+end
 MarginQuote.open:GetScript("OnClick")(MarginQuote.open, "LeftButton")
 assert(openRecipeCalls == before + 1, "Quote's open button selects the recipe inside the click, not from a timer")
 flush()

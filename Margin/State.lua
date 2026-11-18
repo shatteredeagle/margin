@@ -67,20 +67,35 @@ end
 -- The shopping list to use for a plan: the whole route's, or the chosen step's (falls back to the whole
 -- route when that step no longer exists). Second result: the step (from, to, name) or nil.
 function ns.ShopOf(plan)
+  if S.shopOnCraft and S.shopCraft then return S.shopCraft.shop, nil, S.shopCraft end -- the craft plan's list
+  if not plan then return {}, nil end
   local want = S.shopStep
   local seg = want and plan.segs[want]
   if seg and not seg.gap and seg.shop then return seg.shop, seg end
   return plan.shop, nil
 end
 
+-- Make the shopping lists show a craft plan's materials (qty of recipe), until another choice is made.
+function ns.ShopForCraft(recipe, qty, quote)
+  local shop = {}
+  for _, it in ipairs(quote.shop) do
+    shop[#shop + 1] = { item = it.item, count = it.need, unit = it.unit, src = it.src }
+  end
+  S.shopCraft = { name = recipe.name, qty = qty, shop = shop } -- remembered, so it stays a choice beside the route
+  S.shopOnCraft = true
+  S.shopStep = nil
+end
+
 function ns.SetShopStep(index)
+  S.shopOnCraft = false
   S.shopStep = index
   ns.Print(index and "shopping lists now show one step" or "shopping lists now show the whole route")
 end
 
--- Next choice: whole route, then each step in turn, then back to the whole route.
+-- Next choice: whole route, each step in turn, the craft plan (once you have made one), back to the whole route.
 function ns.CycleShopStep(plan)
   local steps = ns.ShopSteps(plan)
+  if S.shopOnCraft then S.shopOnCraft = false; S.shopStep = nil; return end
   local nextIndex
   if not S.shopStep then nextIndex = steps[1] and steps[1].index
   else
@@ -89,9 +104,11 @@ function ns.CycleShopStep(plan)
     end
   end
   S.shopStep = nextIndex
+  if not nextIndex and S.shopCraft then S.shopOnCraft = true end
 end
 
 function ns.ShopStepLabel(plan)
+  if S.shopOnCraft and S.shopCraft then return ("craft plan: %d x %s"):format(S.shopCraft.qty, S.shopCraft.name) end
   local _, seg = ns.ShopOf(plan)
   if not seg then return "whole route" end
   return ("step %d-%d: %s"):format(seg.from, seg.to, seg.row.r.name)
