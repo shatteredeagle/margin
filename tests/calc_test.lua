@@ -413,4 +413,29 @@ do
   ns.Owned = function() return 0 end
   MarginDB = nil
 end
+
+-- flip limit: how many crafts stay profitable as the ingredient listings get dearer
+do
+  MarginDB = { depth = {} }
+  ns.Owned = function() return 0 end
+  prices[300] = { 100, "ah" }; prices[301] = { 50, "vendor" }
+  ns.NoteDepth(300, { 100, 10, 300, 10 }, false)               -- 10 units @1s, then 10 @3s
+  ns.VendorSell = function(id) return id == 310 and 250 or nil end
+  ns.AHNetPerUnit = function(id) return id == 310 and 1000 or nil end
+  local fr = { id = 700, out = 310, qty = 1, diff = 0, ups = 1, trivial = 400,
+    reagents = { {item = 300, count = 1}, {item = 301, count = 1} } }
+  local fl = ns.FlipLimit(fr, { F = { recipes = { fr } } })
+  -- vendor sale 250: crafts 1-10 cost 100+50 (profit 100 each); craft 11 costs 300+50 (loses 100)
+  assert(fl.vendor.crafts == 10 and fl.vendor.profit == 1000 and fl.vendor.next == -100, fl.vendor.crafts)
+  -- AH sale 1000: every craft pays, so the AH's 20 units are the limit
+  assert(fl.ah.crafts == 20 and fl.ah.bySupply and fl.supplyCap == 20, fl.ah.crafts)
+  -- unknown listings: priced at the lowest price and named
+  prices[302] = { 40, "ah" }
+  local fu = { id = 701, out = 310, qty = 1, diff = 0, ups = 1, trivial = 400, reagents = { {item = 302, count = 1} } }
+  local flu = ns.FlipLimit(fu, { F = { recipes = { fu } } })
+  assert(#flu.unknown == 1 and flu.unknown[1] == 302 and flu.vendor.crafts == 2000, "no supply data: no cap, flagged")
+  local q = ns.Quote(fr, 3, { F = { recipes = { fr } } })
+  assert(q.flip and q.flip.vendor.crafts == 10, "the quote carries it")
+  MarginDB = nil
+end
 print("calc ok")

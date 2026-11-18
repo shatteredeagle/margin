@@ -3,7 +3,7 @@ local _, ns = ...
 -- The craft planner: click a recipe on the Profit tab, pick how many to craft, and see what to buy, what
 -- it costs and what you would net. The numbers come from ns.Quote (Calc.lua); this is only the window.
 
-local ROWS, ROW_H, WIDTH = 9, 22, 400
+local ROWS, ROW_H, WIDTH = 8, 22, 400
 local frame, recipe, qty, offset = nil, nil, 1, 0
 local quote
 
@@ -33,7 +33,7 @@ end
 
 local function build()
   frame = CreateFrame("Frame", "MarginQuote", UIParent, "BasicFrameTemplateWithInset")
-  frame:SetSize(WIDTH, 470)
+  frame:SetSize(WIDTH, 500)
   frame:SetPoint("CENTER", 120, 0)
   frame:SetMovable(true)
   frame:EnableMouse(true)
@@ -91,13 +91,13 @@ local function build()
   frame.edit:SetScript("OnEscapePressed", function(self) self:ClearFocus(); self:SetText(tostring(qty)) end)
   frame.edit:SetScript("OnEditFocusLost", function(self) setQty(self:GetText()) end)
   frame.plus = small("+", 150, 24, function() setQty(qty + (IsShiftKeyDown() and 10 or 1)) end)
-  local x = 184
+  local x = 180
   frame.presets = {}
   for _, n in ipairs({ 5, 10, 25 }) do
-    frame.presets[#frame.presets + 1] = small(tostring(n), x, 34, function() setQty(n) end)
-    x = x + 36
+    frame.presets[#frame.presets + 1] = small(tostring(n), x, 30, function() setQty(n) end)
+    x = x + 32
   end
-  frame.max = small("Max", x, 44, function() if quote and quote.maxHeld > 0 then setQty(quote.maxHeld) end end)
+  frame.max = small("Max", x, 40, function() if quote and quote.maxHeld > 0 then setQty(quote.maxHeld) end end)
   frame.max:SetScript("OnEnter", function(self)
     GameTooltip:SetOwner(self, "ANCHOR_TOP")
     GameTooltip:AddLine("Most you can craft from what you already hold")
@@ -105,6 +105,17 @@ local function build()
     GameTooltip:Show()
   end)
   frame.max:SetScript("OnLeave", GameTooltip_Hide)
+  frame.best = small("Best", x + 42, 44, function()
+    local f = quote and quote.flip and quote.flip[ns.Opt("sortKey") == "ah" and "ah" or "vendor"]
+    if f and f.crafts > 0 then setQty(f.crafts) end
+  end)
+  frame.best:SetScript("OnEnter", function(self)
+    GameTooltip:SetOwner(self, "ANCHOR_TOP")
+    GameTooltip:AddLine("Most crafts that still pay")
+    GameTooltip:AddLine("Buying more ingredients means buying dearer listings. Best is the number of crafts after which the next one would lose money (or the AH runs out), for the sale route chosen on the Profit tab (Sell: vendor / AH).", 1, 1, 1, true)
+    GameTooltip:Show()
+  end)
+  frame.best:SetScript("OnLeave", GameTooltip_Hide)
 
   -- the money, at a glance
   frame.sum = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
@@ -113,7 +124,7 @@ local function build()
   frame.sum:SetJustifyH("LEFT")
   frame.sum:SetSpacing(3)
   frame.warn = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-  frame.warn:SetPoint("TOPLEFT", 14, -190)
+  frame.warn:SetPoint("TOPLEFT", 14, -228)
   frame.warn:SetWidth(WIDTH - 28)
   frame.warn:SetJustifyH("LEFT")
   frame.warn:SetTextColor(1, 0.82, 0.4)
@@ -122,7 +133,7 @@ local function build()
   for i = 1, ROWS do
     local row = CreateFrame("Frame", nil, frame)
     row:SetSize(WIDTH - 36, ROW_H)
-    row:SetPoint("TOPLEFT", 14, -214 - (i - 1) * ROW_H)
+    row:SetPoint("TOPLEFT", 14, -254 - (i - 1) * ROW_H)
     row.icon = row:CreateTexture(nil, "ARTWORK")
     row.icon:SetSize(16, 16)
     row.icon:SetPoint("LEFT", 0, 0)
@@ -160,6 +171,10 @@ function ns.RefreshQuote()
   frame.sub:SetText(("makes %d x %s"):format(quote.units, r.out and itemName(r.out) or "nothing you can sell"))
   if not frame.edit:HasFocus() then frame.edit:SetText(tostring(qty)) end
   frame.max:SetEnabled(quote.maxHeld > 0)
+  do
+    local f = quote.flip and quote.flip[ns.Opt("sortKey") == "ah" and "ah" or "vendor"]
+    frame.best:SetEnabled(f ~= nil and f.crafts > 0)
+  end
 
   local L = {}
   L[#L + 1] = ("You pay now        %s"):format(money(quote.cash))
@@ -169,6 +184,22 @@ function ns.RefreshQuote()
       quote.revenue.vendor and money(quote.revenue.vendor) or "|cff909090?|r",
       quote.revenue.ah and money(quote.revenue.ah) or "|cff909090?|r")
     L[#L + 1] = ("|cffffd700Net profit|r        vendor %s   AH %s"):format(signed(quote.profit.vendor), signed(quote.profit.ah))
+    -- how far the profit goes: each batch of ingredients is bought from dearer listings than the last
+    local fl = quote.flip
+    if fl and (fl.vendor or fl.ah) then
+      local function part(f, label)
+        if not f then return nil end
+        if f.crafts == 0 then return ("%s |cffff6060none pay|r"):format(label) end
+        local more = f.bySupply and " |cff909090(all the AH has)|r" or ""
+        if #fl.unknown > 0 and f.crafts >= 2000 then return ("%s |cff909090no limit known|r"):format(label) end
+        return ("%s |cffffd700%d|r (%s)%s"):format(label, f.crafts, signed(f.profit), more)
+      end
+      L[#L + 1] = ("Worth doing       up to %s   %s"):format(part(fl.vendor, "vendor") or "", part(fl.ah, "AH") or "")
+      local sel = fl[ns.Opt("sortKey") == "ah" and "ah" or "vendor"]
+      if sel and sel.next then
+        L[#L + 1] = ("|cff909090The next craft after that would %s|r"):format(("lose %s"):format(money(-sel.next)))
+      end
+    end
   else
     L[#L + 1] = "|cff909090This recipe makes nothing you can sell.|r"
   end
@@ -176,6 +207,9 @@ function ns.RefreshQuote()
 
   local warns = {}
   if r.train or r.teach or r.extra then warns[#warns + 1] = "You have not learned this recipe yet." end
+  if quote.flip and #quote.flip.unknown > 0 then
+    warns[#warns + 1] = ("Listings unknown for %d ingredient%s: the limit may be off (run a Full scan)."):format(#quote.flip.unknown, #quote.flip.unknown > 1 and "s" or "")
+  end
   if quote.unpriced > 0 then warns[#warns + 1] = ("%d reagent%s with no price: profit not shown."):format(quote.unpriced, quote.unpriced > 1 and "s" or "") end
   if #quote.short > 0 then
     local names = {}

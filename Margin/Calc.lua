@@ -650,5 +650,74 @@ function ns.Quote(r, crafts, profs)
 
   return { crafts = crafts, units = units, shop = shop, made = made, cash = cash, fullCost = fullCost,
     revenue = revenue, profit = profit, unpriced = unpriced, short = short, maxHeld = most,
-    perCraftCost = fullCost / crafts }
+    perCraftCost = fullCost / crafts, flip = ns.FlipLimit(r, profs) }
+end
+
+-- Cost of buying units (from, to] of a listing book ({ price, qty, price, qty, ... }, cheapest first); nil when
+-- the book holds fewer than `to` units.
+local function bookCost(p, from, to)
+  local cost, pos = 0, 0
+  for i = 1, #p, 2 do
+    local price, q = p[i], p[i + 1]
+    local a, b = math.max(pos, from), math.min(pos + q, to)
+    if b > a then cost = cost + (b - a) * price end
+    pos = pos + q
+    if pos >= to then return cost end
+  end
+  return nil
+end
+
+-- How many crafts of recipe r are still worth doing when the ingredients are bought off the AH, cheapest
+-- listing first. The lowest price only holds for the first few units: each craft after that costs more,
+-- until one costs more than it sells for. Per sale mode ("vendor", "ah"): { crafts, profit (the total over
+-- those crafts), next (what the first craft past the limit would lose), bySupply (stopped because the AH ran
+-- out, not because it stopped paying) }. Ingredients whose listings are unknown are priced at their lowest
+-- price and named in `unknown`. Held items are ignored: this is the market, not your bags.
+function ns.FlipLimit(r, profs)
+  profs = profs or ns.Char().profs
+  local idx = craftIndex(profs)
+  local per = {}
+  expand(r, 1, idx, per, nil, nil)
+  local books, fixed, cap, unknown = {}, 0, math.huge, {}
+  for item, n in pairs(per) do
+    local unit, src = ns.BuyPrice(item)
+    if not unit then return nil end
+    local d = (src == "ah" and ns.Depth) and ns.Depth(item) or nil
+    if d then
+      if not d.capped then
+        local total = 0
+        for i = 2, #d.p, 2 do total = total + d.p[i] end
+        cap = math.min(cap, math.floor(total / n + 1e-9))
+      end
+      books[#books + 1] = { n = n, p = d.p }
+    else
+      fixed = fixed + unit * n
+      if src == "ah" then unknown[#unknown + 1] = item end
+    end
+  end
+  local units = r.qty or 1
+  local function craftCost(k) -- the k-th craft's ingredients
+    local c = fixed
+    for _, b in ipairs(books) do
+      local x = bookCost(b.p, (k - 1) * b.n, k * b.n)
+      if not x then return nil end
+      c = c + x
+    end
+    return c
+  end
+  local function limit(each)
+    if not each then return nil end
+    local revenue, total, k = each * units, 0, 0
+    local top = math.min(cap, 2000)
+    while k < top do
+      local c = craftCost(k + 1)
+      if not c then break end
+      if revenue - c < 0 then return { crafts = k, profit = total, next = revenue - c } end
+      k, total = k + 1, total + (revenue - c)
+    end
+    return { crafts = k, profit = total, bySupply = cap ~= math.huge and k >= cap }
+  end
+  local vendorEach = r.out and ns.VendorSell(r.out) or nil
+  local ahEach = r.out and ns.AHNetPerUnit and ns.AHNetPerUnit(r.out) or nil
+  return { vendor = limit(vendorEach), ah = limit(ahEach), supplyCap = cap ~= math.huge and cap or nil, unknown = unknown }
 end
