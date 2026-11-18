@@ -84,7 +84,7 @@ end
 
 local f = CreateFrame("Frame")
 f:RegisterEvent("SKILL_LINES_CHANGED")
-f:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
+f:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player") -- not everyone else's casts
 f:SetScript("OnEvent", function(_, event, unit, _, spellID)
   if event == "SKILL_LINES_CHANGED" then
     C_Timer.After(0.2, ns.RefreshSkills)

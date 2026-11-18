@@ -49,6 +49,7 @@ UISpecialFrames
 UnitName
 _G
 date
+debugprofilestop
 error
 hooksecurefunc
 ipairs

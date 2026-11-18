@@ -173,7 +173,9 @@ function ns.CurrentPlan()
     lock and lock.t or "free", ns.Opt("noLock") and "n" or "l" }, "|")
   local hit = planCache[key]
   if not hit then
+    local t0 = debugprofilestop()
     hit = ns.Plan(prof, target, nil, ns.Opt("useTrainer"), lock and ns.ForceFromPicks(lock.picks) or nil)
+    ns.PerfNote("plan", debugprofilestop() - t0)
     planCache[key] = hit
     if useLock and not lock then
       char.locks[name] = { key = lockKey, t = time(), picks = ns.PlanPicks(hit) }

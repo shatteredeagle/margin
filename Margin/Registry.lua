@@ -174,12 +174,14 @@ end
 
 -- Redraw everything: the plan is recomputed, then the main window and the companions.
 function ns.RefreshUI()
+  local t0 = debugprofilestop()
   ns.InvalidatePlan()
   if ns.RefreshShopping then ns.RefreshShopping() end
   if ns.RefreshMerchant then ns.RefreshMerchant() end
   if ns.RefreshQuote then ns.RefreshQuote() end
   local L = Layouts.active()
   if L then L.refresh() end
+  ns.PerfNote("refresh", debugprofilestop() - t0)
 end
 
 -- Item names arrived: rebuild the text only. Never re-plans (ns.RefreshUI does), or every name that

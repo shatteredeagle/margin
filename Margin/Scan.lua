@@ -91,7 +91,7 @@ local function logScan(why, base, extra)
   while #log > 20 do table.remove(log, 1) end
 end
 
-function ns.Scan(verbose)
+local function scanNow(verbose)
   if not (T and T.IsTradeSkillReady and T.IsTradeSkillReady()) then
     if verbose then ns.Print("Open a profession window first.") end
     local base = T and T.GetBaseProfessionInfo and T.GetBaseProfessionInfo()
@@ -186,6 +186,12 @@ function ns.Scan(verbose)
 end
 
 local pending
+function ns.Scan(verbose)
+  local t0 = debugprofilestop()
+  scanNow(verbose)
+  ns.PerfNote("scan", debugprofilestop() - t0)
+end
+
 local f = CreateFrame("Frame")
 f:RegisterEvent("TRADE_SKILL_LIST_UPDATE")
 f:RegisterEvent("TRADE_SKILL_SHOW")
@@ -202,6 +208,13 @@ f:SetScript("OnEvent", function(_, event)
     while #MarginDB.scanLog > 20 do table.remove(MarginDB.scanLog, 1) end
   end
   if pending then return end
+  if event == "TRADE_SKILL_LIST_UPDATE" then
+    -- the list updates on every craft, filter and search while a profession window is open; re-reading every
+    -- recipe each time was a lot of work and garbage. Read again when your skill changed or the read is old.
+    local base = T.GetBaseProfessionInfo and T.GetBaseProfessionInfo()
+    local last = base and base.professionName and ns.Char().profs[base.professionName]
+    if last and last.skill == base.skillLevel and time() - (last.time or 0) < 30 then return end
+  end
   pending = true
   C_Timer.After(0.5, function() pending = nil; ns.Scan(false) end)
 end)

@@ -55,6 +55,26 @@ end
 
 function ns.Print(...) print("|cff66ccffMargin|r", ...) end
 
+-- How long the heavy jobs take (scan, route planning, redraw): /margin perf shows count, average and worst, in ms
+local perf = {}
+function ns.PerfNote(name, ms)
+  local p = perf[name]
+  if not p then p = { n = 0, total = 0, max = 0 }; perf[name] = p end
+  p.n, p.total = p.n + 1, p.total + ms
+  if ms > p.max then p.max = ms end
+end
+function ns.PerfReport()
+  local names = {}
+  for k in pairs(perf) do names[#names + 1] = k end
+  table.sort(names)
+  if #names == 0 then return ns.Print("nothing timed yet") end
+  for _, k in ipairs(names) do
+    local p = perf[k]
+    ns.Print(("%s: %d runs, avg %.1f ms, worst %.1f ms, total %.0f ms"):format(k, p.n, p.total / p.n, p.max, p.total))
+  end
+end
+function ns.PerfReset() perf = {} end
+
 local f = CreateFrame("Frame")
 f:RegisterEvent("ADDON_LOADED")
 f:SetScript("OnEvent", function(_, _, name)
@@ -100,6 +120,10 @@ SlashCmdList.MARGIN = function(msg)
       if ns.RefreshUI then ns.RefreshUI() end
     end
     ns.Print("skill-up odds:", ns.Opt("odds"), "(/margin odds worst | typical)")
+  elseif msg == "perf" then
+    ns.PerfReport()
+  elseif msg == "perf reset" then
+    ns.PerfReset(); ns.Print("timings cleared")
   elseif msg == "dump" then
     ns.Dump()
   elseif msg:match("^step") then

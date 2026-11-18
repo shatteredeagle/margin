@@ -147,6 +147,7 @@ function Obj.RegisterEvent(o, e)
   for _, f in ipairs(events[e]) do if f == o then return end end
   table.insert(events[e], o)
 end
+function Obj.RegisterUnitEvent(o, e, ...) Obj.RegisterEvent(o, e) end -- (the units are not modelled)
 function Obj.UnregisterEvent(o, e)
   for i, f in ipairs(events[e] or {}) do if f == o then table.remove(events[e], i); return end end
 end
@@ -183,6 +184,7 @@ UISpecialFrames = {}
 tinsert = table.insert
 function wipe(t) for k in pairs(t) do t[k] = nil end return t end
 time = os.time
+debugprofilestop = function() return os.clock() * 1000 end
 date = os.date
 local now = 1000
 function GetTime() return now end
