@@ -56,7 +56,15 @@ function ns.Dump()
     o[#o + 1] = ("%s=%s"):format(k, tostring(ns.Opt(k)))
   end
   out[#out + 1] = "settings: " .. table.concat(o, ", ")
-  for name, prof in pairs(ns.Char().profs) do
+  -- (sorted, so two dumps line up and a comparison shows only what really changed)
+  local function sortedKeys(t)
+    local keys = {}
+    for k in pairs(t or {}) do keys[#keys + 1] = k end
+    table.sort(keys)
+    return keys
+  end
+  for _, name in ipairs(sortedKeys(ns.Char().profs)) do
+    local prof = ns.Char().profs[name]
     out[#out + 1] = ("%s: skill %s (scanned at %s) of %s, %d learned, %d unlearned considered, scanned %s%s"):format(
       name, tostring(prof.skill), tostring(prof.scanSkill), tostring(prof.max), #prof.recipes, #(prof.unlearned or {}),
       date("%H:%M:%S", prof.time or 0), prof.dirty and ", NEEDS REFRESH" or "")
@@ -77,7 +85,8 @@ function ns.Dump()
   else
     out[#out + 1] = "no scanned profession yet"
   end
-  for pn, h in pairs(ns.Char().history or {}) do
+  for _, pn in ipairs(sortedKeys(ns.Char().history)) do
+    local h = ns.Char().history[pn]
     out[#out + 1] = ("history %s: %d entries"):format(pn, #h)
     for _, e in ipairs(h) do
       out[#out + 1] = ("  %d-%d %s x%d, %s"):format(e.from, e.to, e.name, e.crafts or 0, plain(e.cost))
@@ -85,6 +94,11 @@ function ns.Dump()
   end
   out[#out + 1] = "scan log (newest last):"
   for _, l in ipairs(MarginDB.scanLog or {}) do out[#out + 1] = "  " .. l end
+  -- keep the last six, newest last, so two dumps can be compared after a /reload (MarginDB.dump stays the latest)
   MarginDB.dump = out
-  ns.Print(("dump written (%d lines). /reload to save it to disk."):format(#out))
+  MarginDB.dumps = MarginDB.dumps or {}
+  table.insert(MarginDB.dumps, { t = time(), at = date("%H:%M:%S"), lines = out })
+  while #MarginDB.dumps > 6 do table.remove(MarginDB.dumps, 1) end
+  ns.Print(("dump %d written at %s (%d lines). /reload to save it; do another to compare."):format(
+    #MarginDB.dumps, date("%H:%M:%S"), #out))
 end
