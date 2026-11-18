@@ -61,6 +61,7 @@ pairs
 pcall
 print
 select
+setmetatable
 table
 time
 tinsert

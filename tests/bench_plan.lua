@@ -7,7 +7,7 @@ local ns = { Opt = function(k)
   return nil
 end }
 MarginDB = { depth = {}, bands = {} }
-local prices, N_ITEMS = {}, 80
+local prices, N_ITEMS = {}, 160
 math.randomseed(7)
 for i = 1, N_ITEMS do prices[i] = { 20 + math.random(0, 400), (i % 3 == 0) and "vendor" or "ah" } end
 ns.VENDOR_SEED = {}
@@ -22,7 +22,7 @@ assert(loadfile("Margin/Depth.lua"))("Margin", ns)
 for i = 1, N_ITEMS do
   if prices[i][2] == "ah" then
     local flat = {}
-    for k = 1, 30 do flat[#flat + 1] = prices[i][1] + k * 3; flat[#flat + 1] = math.random(1, 40) end
+    for k = 1, 250 do flat[#flat + 1] = prices[i][1] + k * 2; flat[#flat + 1] = math.random(1, 40) end
     ns.NoteDepth(i, flat, false)
   end
 end
@@ -31,14 +31,14 @@ assert(loadfile("Margin/Calc.lua"))("Margin", ns)
 local function recipe(id, extra)
   local r = { id = id, name = "R" .. id, out = 1000 + id, qty = 1, diff = math.random(0, 2), ups = 1,
     trivial = 120 + math.random(0, 130), reagents = {} }
-  for k = 1, 3 do r.reagents[k] = { item = math.random(1, N_ITEMS), count = math.random(1, 6) } end
+  for k = 1, 4 do r.reagents[k] = { item = math.random(1, N_ITEMS), count = math.random(1, 10) } end
   for k, v in pairs(extra or {}) do r[k] = v end
   return r
 end
 local learned, unlearned = {}, {}
-for i = 1, 90 do learned[i] = recipe(i) end
-for i = 1, 40 do unlearned[i] = recipe(200 + i, { train = { rank = 100 + math.random(0, 100), fee = 200 + math.random(0, 3000) } }) end
-for i = 1, 60 do unlearned[#unlearned + 1] = recipe(300 + i, { teach = { { item = 5000 + i, rank = 100 + math.random(0, 120), rep = false } } }) end
+for i = 1, 130 do learned[i] = recipe(i) end
+for i = 1, 80 do unlearned[i] = recipe(200 + i, { train = { rank = 100 + math.random(0, 100), fee = 200 + math.random(0, 3000) } }) end
+for i = 1, 100 do unlearned[#unlearned + 1] = recipe(300 + i, { teach = { { item = 5000 + i, rank = 100 + math.random(0, 120), rep = false } } }) end
 ns.AHPrice = (function(f) return function(id) if id >= 5000 then return 500 + id % 700 end return f(id) end end)(ns.AHPrice)
 local prof = { skill = 150, scanSkill = 150, max = 225, recipes = learned, unlearned = unlearned }
 local t0 = os.clock()

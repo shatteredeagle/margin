@@ -149,8 +149,14 @@ end
 -- The route for the profession the window shows: plan, prof, name, target (nil when nothing is scanned).
 -- Planning is heavy, so results are kept per setting until prices or scans change (ns.InvalidatePlan);
 -- bag updates and scrolling reuse them.
-local planCache = {}
-function ns.InvalidatePlan() wipe(planCache) end
+-- The comparison cards' plans (priced under other settings, never locked) are kept apart: a craft or a bag change
+-- (soft = true) moves the route you follow but hardly the comparison, and planning all of them again every time
+-- was the bulk of every refresh. Prices, scans and settings (the full invalidation) drop them too.
+local planCache, cardCache, cardCount = {}, {}, 0
+function ns.InvalidatePlan(soft)
+  wipe(planCache)
+  if not soft then wipe(cardCache); cardCount = 0 end
+end
 
 -- Forget the locked route for a profession; the next plan is a fresh one.
 function ns.ClearLock(name)
@@ -179,12 +185,18 @@ function ns.CurrentPlan()
 
   local key = table.concat({ name, prof.skill, prof.scanSkill or 0, prof.time or 0, lockKey,
     lock and lock.t or "free", ns.Opt("noLock") and "n" or "l" }, "|")
-  local hit = planCache[key]
+  local cards = ns.Opt("noLock") and true or false
+  local cache = cards and cardCache or planCache
+  local hit = cache[key]
   if not hit then
     local t0 = debugprofilestop()
     hit = ns.Plan(prof, target, nil, ns.Opt("useTrainer"), lock and ns.ForceFromPicks(lock.picks) or nil)
     ns.PerfNote("plan", debugprofilestop() - t0)
-    planCache[key] = hit
+    if cards then
+      if cardCount >= 40 then wipe(cardCache); cardCount = 0 end
+      cardCount = cardCount + 1
+    end
+    cache[key] = hit
     if useLock and not lock then
       char.locks[name] = { key = lockKey, t = time(), picks = ns.PlanPicks(hit) }
     end

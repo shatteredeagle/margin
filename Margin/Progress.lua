@@ -191,6 +191,6 @@ bagFrame:SetScript("OnEvent", function()
     local sig = bagSignature()
     if sig == lastSig then return end -- nothing the route uses has changed
     lastSig = sig
-    if ns.RefreshUI then ns.RefreshUI() end
+    if ns.RefreshUI then ns.RefreshUI(true) end -- soft: the comparison cards keep their plans
   end)
 end)

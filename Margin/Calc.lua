@@ -330,6 +330,7 @@ end
 -- The edges come out as ranges that tighten with every scan, shared by all your characters.
 function ns.ObserveBands(recipes, skill)
   if not (MarginDB and skill) then return end
+  ns.chanceVersion = (ns.chanceVersion or 0) + 1 -- what is known of the colour edges changed: forget remembered odds
   MarginDB.bands = MarginDB.bands or {}
   for _, r in ipairs(recipes) do
     local d = r.diff
@@ -392,13 +393,25 @@ end
 -- Skill-up chance of row.r at skill s for the route. Learned recipes use the
 -- difficulty seen at the scanned skill; trainer recipes start orange at the rank
 -- the trainer needs and are unavailable before it.
-local function chanceAt(row, s0, s)
+-- Remembered per recipe (weak keys, so rescanned recipes drop out): the odds depend only on the recipe, the skill
+-- it starts from, the odds setting and what the scans have seen of its colours (ns.chanceVersion), and planning
+-- asks for the same point from every route it tries.
+local chanceCache = setmetatable({}, { __mode = "k" })
+local function chanceAt(row, s0, s, mode, ver)
   local r = row.r
+  local from = s0
   if row.learn then
     if s < row.learn.rank then return 0 end
-    return ns.RouteChance(r, row.learn.rank, s)
+    from = row.learn.rank
   end
-  return ns.RouteChance(r, s0, s)
+  local c = chanceCache[r]
+  if not c or c.mode ~= mode or c.from ~= from or c.ver ~= ver then
+    c = { mode = mode, from = from, ver = ver }
+    chanceCache[r] = c
+  end
+  local v = c[s]
+  if v == nil then v = ns.RouteChance(r, from, s); c[s] = v end
+  return v
 end
 
 -- One pass of the planner: at each skill point the available recipe with the
@@ -451,6 +464,8 @@ local function route(rows, base, start, target, skip, force, byId)
     end
     return math.max(0, extra)
   end
+  local candRow, candCh, candP0 = {}, {}, {} -- scratch lists, reused at every skill point
+  local mode, ver = ns.Opt("odds"), ns.chanceVersion or 0
   local function supplyOf(item)
     local v = left[item]
     if v == nil then v = (ns.Supply and ns.Supply(item) or math.huge) + ns.Owned(item); left[item] = v end
@@ -468,20 +483,39 @@ local function route(rows, base, start, target, skip, force, byId)
     -- a locked route keeps its earlier pick for this skill point while it is still usable
     local pick = force and force[s] and byId[force[s]]
     if pick and pick.missing == 0 and not skip[pick] and not pick.unavailable then
-      local ch = chanceAt(pick, base, s) * pick.r.ups
+      local ch = chanceAt(pick, base, s, mode, ver) * pick.r.ups
       if ch > 0 and fits(pick, ch) then
         bestExtra = extraFor(pick, ch)
         best, bestPer, bestCh = pick, math.max(pick.net, 0) / ch + bestExtra, ch
       end
     end
-    for _, row in ipairs(best and {} or rows) do
-      if row.missing == 0 and not skip[row] and not row.unavailable then
-        local ch = chanceAt(row, base, s) * row.r.ups
-        if ch > 0 and fits(row, ch) then
-          local extra = extraFor(row, ch)
-          local per = math.max(row.net, 0) / ch + extra -- see rankPer in Evaluate
-          if not best or per < bestPer or (per == bestPer and ch > bestCh) then
-            best, bestPer, bestCh, bestExtra = row, per, ch, extra
+    if not best then
+      -- Pricing the AH listings a recipe walks into (extraFor) is the expensive part, and it can only add to a
+      -- recipe's cost. So: collect who can be made, price the cheapest one in full for a bound, and only price
+      -- the rest when their cost before walking is no worse than that bound. Same winner, a fraction of the work.
+      local n, minAt, minPer0 = 0, nil, nil
+      for _, row in ipairs(rows) do
+        if row.missing == 0 and not skip[row] and not row.unavailable then
+          local ch = chanceAt(row, base, s, mode, ver) * row.r.ups
+          if ch > 0 and fits(row, ch) then
+            n = n + 1
+            candRow[n], candCh[n] = row, ch
+            local per0 = math.max(row.net, 0) / ch -- see rankPer in Evaluate
+            candP0[n] = per0
+            if not minPer0 or per0 < minPer0 then minAt, minPer0 = n, per0 end
+          end
+        end
+      end
+      if n > 0 then
+        local bound = minPer0 + extraFor(candRow[minAt], candCh[minAt])
+        for i = 1, n do
+          if candP0[i] <= bound then
+            local row, ch = candRow[i], candCh[i]
+            local extra = extraFor(row, ch)
+            local per = candP0[i] + extra
+            if not best or per < bestPer or (per == bestPer and ch > bestCh) then
+              best, bestPer, bestCh, bestExtra = row, per, ch, extra
+            end
           end
         end
       end

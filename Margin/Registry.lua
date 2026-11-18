@@ -173,9 +173,9 @@ function ns.UIScrollTop()
 end
 
 -- Redraw everything: the plan is recomputed, then the main window and the companions.
-function ns.RefreshUI()
+function ns.RefreshUI(soft)
   local t0 = debugprofilestop()
-  ns.InvalidatePlan()
+  ns.InvalidatePlan(soft)
   if ns.RefreshShopping then ns.RefreshShopping() end
   if ns.RefreshMerchant then ns.RefreshMerchant() end
   if ns.RefreshQuote then ns.RefreshQuote() end

@@ -749,6 +749,18 @@ flush()
 assert(win.list.entries ~= oldEntries, "the names redraw happened")
 assert(plans == 0 and invalidations == 0, ("GET_ITEM_INFO_RECEIVED re-planned (%d plans, %d invalidations)"):format(plans, invalidations))
 ns.Plan, ns.InvalidatePlan = realPlan, realInvalidate
+-- a bag change replans the route you follow, never the comparison cards (planning them all again every couple of
+-- seconds while crafting was the FPS sawtooth)
+do
+  ns.RefreshUI(); ns.RefreshUI() -- plans and the card plans cached
+  local n = 0
+  ns.Plan = function(...) n = n + 1; return realPlan(...) end
+  bags[4234] = (bags[4234] or 0) + 25
+  fire("BAG_UPDATE_DELAYED")
+  flush(5)
+  ns.Plan = realPlan
+  assert(n >= 1 and n <= 2, "bag change replanned the route (and at most its lock): " .. n .. " plans")
+end
 
 ---------------------------------------------------------------------------
 -- Auction house: the strip, the lookup, the shopping list

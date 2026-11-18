@@ -21,11 +21,18 @@ function ns.Depth(itemID)
 end
 
 -- Units listed. nil when unknown: never looked at, too old, or the listings were cut off.
+-- (summing the listings is remembered per entry: planning asks for every item many times, and NoteDepth always
+-- stores a new table, so a weak-keyed memory cannot go stale)
+local totals = setmetatable({}, { __mode = "k" })
 function ns.Supply(itemID)
   local d = ns.Depth(itemID)
   if not d or d.capped then return nil end
-  local total = 0
-  for i = 2, #d.p, 2 do total = total + d.p[i] end
+  local total = totals[d]
+  if not total then
+    total = 0
+    for i = 2, #d.p, 2 do total = total + d.p[i] end
+    totals[d] = total
+  end
   return total
 end
 
