@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- The shopping list's step button is now a dropdown: Whole route, Next step, any single step, or the craft plan's list (from the Profit tab's craft planner). It has its own row in the shopping list header.
+
 - **Route planning is about 3x faster, and crafting no longer replans everything.** Measured in game, one plan took ~560 ms and a refresh (the route plus the four comparison cards) ~2.2 s, repeated every couple of seconds while crafting: that was the FPS sawtooth. Planning now skips pricing the AH listings for recipes that cannot win (same route, same numbers), remembers each recipe's skill-up odds and each item's total supply, and a bag change replans only the route you follow: the comparison cards keep their plans until prices, scans or settings change. `/margin perf` shows the timings.
 
 - **Ignore a craft.** Right-click a recipe row in the Ledger (a Route step, or a Profit or Leveling row) and choose "Ignore craft" for a recipe you cannot get (a limited vendor recipe your server never has, say). It leaves every list, route and craft plan, is not used as a way to make an ingredient, and the routes that used it are planned again. To bring one back: Settings > Ignored crafts (pick it from the menu), or `/margin ignored` and `/margin unignore <name>`. Shared by all your characters.

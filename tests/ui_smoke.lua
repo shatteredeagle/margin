@@ -780,10 +780,24 @@ click(MarginAHStrip.lookup)
 fire("COMMODITY_SEARCH_RESULTS_UPDATED", 4234)
 fire("AUCTION_HOUSE_THROTTLED_SYSTEM_READY")
 flush()
-click(MarginShopping.step); hover(MarginShopping.step) -- one step's list
-ns.RefreshShopping()
-click(MarginShopping.step)
-while ns.S.shopStep do click(MarginShopping.step) end
+-- the header dropdown: whole route, next step, a step, the craft plan
+do
+  local dd = MarginShopping.step
+  local function pick(n) click(dd); assert(dd.menu:IsShown(), "shopping dropdown opens"); click(dd.menu.items[n]) end
+  pick(2) -- next step
+  assert(ns.S.shopStep and not ns.S.shopOnCraft, "next step from the whole route is the first step")
+  local first = ns.S.shopStep
+  pick(2)
+  assert(ns.S.shopStep, "next step again stays on a step")
+  pick(1)
+  assert(ns.S.shopStep == nil and not ns.S.shopOnCraft, "whole route")
+  click(dd)
+  local last = 0
+  for i, b in ipairs(dd.menu.items) do if b:IsShown() then last = i end end
+  click(dd.menu.items[last]) -- the last entry is the craft plan when one was made
+  if ns.S.shopCraft then assert(ns.S.shopOnCraft, "craft plan chosen from the dropdown") end
+  pick(1)
+end
 for _, r in ipairs(shownRows(MarginShopping.list)) do
   hover(r)
   if r.search and r.search:IsShown() then click(r.search) end

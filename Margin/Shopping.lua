@@ -265,25 +265,42 @@ local function build()
   local head = W.Panel(frame, "panel", false)
   head:SetPoint("TOPLEFT", 1, -frame.top)
   head:SetPoint("TOPRIGHT", -1, -frame.top)
-  head:SetHeight(26)
+  head:SetHeight(50) -- the text on the first row, the step dropdown on the second
   head.line = W.Solid(head, "border", "BORDER")
   head.line:SetPoint("BOTTOMLEFT"); head.line:SetPoint("BOTTOMRIGHT"); head.line:SetHeight(1)
   frame.info = W.Text(head, "small", "text")
-  frame.info:SetPoint("LEFT", 10, 0)
-  frame.step = W.Button(head, { width = 130, height = 20, text = "Whole route",
-    onClick = function()
+  frame.info:SetPoint("TOPLEFT", 10, -7)
+  frame.step = W.Dropdown(head, { width = 190, height = 20,
+    tooltip = { "What to shop for", "The whole route, the next step, one step, or the shopping list of a craft plan (the Shopping list button in the craft planner). Shop one step at a time when you cannot afford everything: buy, craft, sell, then the next." },
+    items = function()
       local plan = ns.CurrentPlan()
-      if plan or ns.S.shopCraft then ns.CycleShopStep(plan or { segs = {} }) end -- (the craft plan works without a route)
-      ns.RefreshUI()
+      local items = { { "route", "Whole route" } }
+      if plan then
+        items[#items + 1] = { "next", "Next step" }
+        for _, st in ipairs(ns.ShopSteps(plan)) do
+          items[#items + 1] = { st.index, ("Step %d-%d: %s"):format(st.seg.from, st.seg.to, st.seg.row.r.name) }
+        end
+      end
+      local craft = ns.S.shopCraft
+      if craft then items[#items + 1] = { "craft", ("Craft plan: %d x %s"):format(craft.qty, craft.name) } end
+      return items
     end,
-    tooltip = { "Shop for one step", "Cannot afford everything at once? Pick a step to see only what it needs: buy that, craft, sell, then pick the next step. Click again to move on; after the last step it shows the whole route." } })
-  frame.step:SetPoint("RIGHT", -6, 0)
+    onSelect = function(v)
+      local plan = ns.CurrentPlan()
+      if v == "route" then ns.SetShopStep(nil, true)
+      elseif v == "next" then if plan then ns.NextShopStep(plan) end
+      elseif v == "craft" then ns.S.shopOnCraft = true; ns.S.shopStep = nil
+      else ns.SetShopStep(v, true) end
+      ns.RefreshUI()
+    end })
+  frame.step:SetPoint("BOTTOMRIGHT", -6, 5)
+  frame.step:SetWidth(WIDTH - 22)
   frame.left = W.Text(head, "small", "text", "RIGHT")
-  frame.left:SetPoint("RIGHT", frame.step, "LEFT", -8, 0)
-  frame.list = W.ScrollList(frame, { width = WIDTH - 10, height = HEIGHT - frame.top - 26 - 30,
+  frame.left:SetPoint("TOPRIGHT", -10, -7)
+  frame.list = W.ScrollList(frame, { width = WIDTH - 10, height = HEIGHT - frame.top - 50 - 30,
     makeRow = makeRow, fill = fillRow,
     heightOf = function(e) return e.kind == "section" and 22 or 38 end })
-  frame.list:SetPoint("TOPLEFT", 5, -(frame.top + 27))
+  frame.list:SetPoint("TOPLEFT", 5, -(frame.top + 51))
   frame:SetScript("OnMouseWheel", function(_, d) frame.list.Wheel(nil, d) end)
   local foot = W.Panel(frame, "panel", false)
   foot:SetPoint("BOTTOMLEFT", 1, 1); foot:SetPoint("BOTTOMRIGHT", -1, 1); foot:SetHeight(24)
@@ -309,7 +326,8 @@ function ns.RefreshShopping()
   do
     local plan = ns.CurrentPlan()
     local _, seg, craft = ns.ShopOf(plan)
-    frame.step.label:SetText(craft and "Craft plan" or seg and ("Step %d-%d"):format(seg.from, seg.to) or "Whole route")
+    local text = craft and "Craft plan" or seg and ("Step %d-%d"):format(seg.from, seg.to) or "Whole route"
+    frame.step:SetSelected(craft and "craft" or seg and ns.S.shopStep or "route", text)
   end
   frame.note:SetText(frame.open and "Search fills in the count; buying is your click."
     or "Open the auction house to search.")

@@ -86,10 +86,23 @@ function ns.ShopForCraft(recipe, qty, quote)
   S.shopStep = nil
 end
 
-function ns.SetShopStep(index)
+function ns.SetShopStep(index, quiet)
   S.shopOnCraft = false
   S.shopStep = index
-  ns.Print(index and "shopping lists now show one step" or "shopping lists now show the whole route")
+  if not quiet then ns.Print(index and "shopping lists now show one step" or "shopping lists now show the whole route") end
+end
+
+-- The step after the one showing (the first from the whole route or the craft plan; the last stays put).
+function ns.NextShopStep(plan)
+  local steps = ns.ShopSteps(plan)
+  local nextIndex = steps[1] and steps[1].index
+  if S.shopStep and not S.shopOnCraft then
+    for k, st in ipairs(steps) do
+      if st.index == S.shopStep then nextIndex = (steps[k + 1] or st).index end
+    end
+  end
+  S.shopOnCraft = false
+  S.shopStep = nextIndex
 end
 
 -- Next choice: whole route, each step in turn, the craft plan (once you have made one), back to the whole route.
