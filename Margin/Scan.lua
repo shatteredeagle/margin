@@ -161,6 +161,11 @@ function ns.Scan(verbose)
   for _, r in ipairs(recipes) do r.prof = base.professionName end
   for _, r in ipairs(unlearned) do r.prof = base.professionName end
   for _, r in ipairs(every) do r.prof = base.professionName end
+  -- the profession window you have open is the one Margin opens on next time
+  if ProfessionsFrame and ProfessionsFrame:IsShown() then
+    ns.Char().lastProf = base.professionName
+    if ns.S then ns.S.prof = base.professionName end
+  end
   ns.Char().profs[base.professionName] = {
     id = base.professionID, skill = base.skillLevel, max = base.maxSkillLevel, scanSkill = base.skillLevel,
     time = time(), recipes = recipes, unlearned = unlearned,

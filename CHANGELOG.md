@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Margin remembers the profession you last had open (or picked in Margin) and opens on it next time, per character.
+
 - Fixed: a locked route could differ from the plan it was locked from. Replaying a lock re-tested each learned recipe against a route whose other points were all forced, and could throw one recipe out (the route then mixed two plans, with one recipe appearing twice). A lock now keeps every recipe it chose; the check only applies to recipes the lock did not pick.
 
 - `/margin dump` keeps the last six dumps (with their times) instead of overwriting, in a stable order, so two dumps can be compared after a /reload.

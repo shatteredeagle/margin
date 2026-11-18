@@ -125,6 +125,7 @@ local function build()
     local idx = 1
     for i, n in ipairs(names) do if n == S.prof then idx = i % #names + 1 end end
     S.prof = names[idx]
+    ns.Char().lastProf = S.prof
     setOffset(0)
   end)
   frame.tSort = button(376, 110, "", function()
@@ -614,6 +615,7 @@ redraw = function()
     if selected then b:LockHighlight() else b:UnlockHighlight() end
   end
   local profs = ns.Char().profs
+  if not S.prof then S.prof = ns.Char().lastProf end
   if not S.prof or not profs[S.prof] then S.prof = next(profs) end
   local prof = S.prof and profs[S.prof]
   local key, showAll = ns.Opt("sortKey"), ns.Opt("showAll")

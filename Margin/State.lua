@@ -35,12 +35,13 @@ end
 -- The profession the window shows: the chosen one while it is still scanned, else any scanned one.
 function ns.ProfName()
   local profs = ns.Char().profs
+  if not S.prof then S.prof = ns.Char().lastProf end -- first look this session: the one you had last
   if not S.prof or not profs[S.prof] then S.prof = next(profs) end
   return S.prof, S.prof and profs[S.prof]
 end
 
 function ns.SetProfession(name)
-  if name and ns.Char().profs[name] then S.prof = name end
+  if name and ns.Char().profs[name] then S.prof = name; ns.Char().lastProf = name end
 end
 
 -- Next profession in name order (wraps).
@@ -50,6 +51,7 @@ function ns.CycleProfession()
   local idx = 1
   for i, n in ipairs(names) do if n == S.prof then idx = i % #names + 1 end end
   S.prof = names[idx]
+  ns.Char().lastProf = S.prof
 end
 
 function ns.SetTab(tab)
