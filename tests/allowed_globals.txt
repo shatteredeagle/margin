@@ -13,6 +13,7 @@ C_Timer
 C_TooltipInfo
 C_TradeSkillUI
 CollapseFactionHeader
+CreateFont
 CreateFrame
 EventRegistry
 ExpandFactionHeader

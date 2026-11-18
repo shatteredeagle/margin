@@ -1,12 +1,13 @@
 local _, ns = ...
 
 local ROWS, ROW_H = 16, 20
-local frame, tab, profName = nil, "profit", nil
+local frame = nil
+local S = ns.S         -- shared with the other layouts (State.lua): profession, tab, sort
+local T = ns.T
 local offset, total = 0, 0
 local shown = ROWS   -- rows visible: fewer on the Route tab, which has the comparison cards
 local cache          -- Route tab data, kept while only scrolling
 local redraw         -- the draw function (defined below)
-local sortCol, sortAsc = nil, false -- clicked column (1 name, 2 cost, 3 sale, 4 profit/per-up)
 
 local DIFF_COLOR = { [0] = "ff8040", [1] = "ffff00", [2] = "40c040", [3] = "909090" }
 
@@ -16,46 +17,8 @@ local HEADERS = {
   route = { "Skill  recipe / shopping list", "Crafts / qty", "Per unit", "Net" },
 }
 
--- Own formatter: GetCoinTextureString is not available on Forever.
-local function money(c)
-  if c == nil then return "?" end
-  local neg = c < 0
-  c = math.floor(math.abs(c) + 0.5)
-  local g, sv, cp = math.floor(c / 10000), math.floor(c / 100) % 100, c % 100
-  local parts = {}
-  if g > 0 then parts[#parts + 1] = g .. "|cffffd700g|r" end
-  if g > 0 or sv > 0 then parts[#parts + 1] = sv .. "|cffc0c0c0s|r" end
-  parts[#parts + 1] = cp .. "|cffeda55fc|r"
-  local out = table.concat(parts, " ")
-  return neg and ("|cffff6060-|r" .. out) or out
-end
-ns.Money = money
-
--- Profit or loss, the same way everywhere: green + when you come out ahead, red - when you lose money.
-local function signed(profit)
-  if profit == nil then return "?" end
-  local r = math.floor(math.abs(profit) + 0.5)
-  if r == 0 then return money(0) end
-  if profit > 0 then return "|cff60ff60+|r" .. money(r) end
-  return "|cffff6060-|r" .. money(r)
-end
-
--- Same amount without colour codes, so a delta can be tinted as a whole.
-local function plainMoney(c)
-  c = math.floor(math.abs(c) + 0.5)
-  local g, sv, cp = math.floor(c / 10000), math.floor(c / 100) % 100, c % 100
-  local out = {}
-  if g > 0 then out[#out + 1] = g .. "g" end
-  if g > 0 or sv > 0 then out[#out + 1] = sv .. "s" end
-  out[#out + 1] = cp .. "c"
-  return table.concat(out, " ")
-end
-
-local function itemName(id)
-  local n = C_Item.GetItemNameByID(id)
-  if not n then C_Item.RequestLoadItemDataByID(id) end
-  return n or ("item " .. id)
-end
+local money, signed, plainMoney = T.Money, T.Signed, T.Plain
+local itemName = ns.ItemName
 
 local function setOffset(v, scrolling)
   local max = math.max(0, total - shown)
@@ -82,19 +45,6 @@ local function recipeTooltip(d)
   end
 end
 
-function ns.SortBy(col, btn)
-  if tab == "route" then return end
-  if btn == "RightButton" then
-    sortCol = nil
-  elseif sortCol == col then
-    sortAsc = not sortAsc
-  else
-    sortCol = col
-    sortAsc = col == 1 or col == 2 or (col == 4 and tab == "level")
-  end
-  setOffset(0)
-end
-
 local function matches(d, q)
   if d.r.name:lower():find(q, 1, true) then return true end
   for _, l in ipairs(d.lines) do
@@ -107,7 +57,7 @@ local SORT_KEYS = { "sortName", "sortCost", "sortSale", "sortVal" }
 
 -- Sorts by the clicked column; entries with no value for it always go last.
 local function sortEntries(list)
-  local k = SORT_KEYS[sortCol]
+  local k = SORT_KEYS[S.sortCol]
   for i, e in ipairs(list) do e.i = i end
   table.sort(list, function(a, b)
     local x, y = a[k], b[k]
@@ -116,95 +66,9 @@ local function sortEntries(list)
       return x ~= nil
     end
     if x == y then return a.i < b.i end
-    if sortAsc then return x < y end
+    if S.sortAsc then return x < y end
     return x > y
   end)
-end
-
--- Open a recipe in the game's own profession window with the number to craft filled in.
--- Opens that profession first when it is not the one showing. Crafting itself stays your click.
---
--- Two things make this flaky if done once and blindly: a window that has just opened loads its
--- list afterwards and resets to the first recipe, and the quantity box resets whenever the
--- recipe changes. So: select until the window reports the right recipe, then fill the number,
--- and fill it again a moment later. The box also refuses more than your materials allow, so
--- when it settles on less than the route wants, say so.
-local function debugPrint(...)
-  if MarginDB and MarginDB.debug then ns.Print("[open]", ...) end
-end
-
-local function quantityBox()
-  local page = ProfessionsFrame and ProfessionsFrame.CraftingPage
-  return page and page.CreateMultipleInputBox
-end
-
--- The recipe the profession window is showing now, or nil when it cannot be told.
-local function selectedRecipe()
-  local page = ProfessionsFrame and ProfessionsFrame.CraftingPage
-  local form = page and page.SchematicForm
-  local ok, info = pcall(function() return form and form.GetRecipeInfo and form:GetRecipeInfo() end)
-  return ok and info and info.recipeID or nil
-end
-
-local function fillCount(count, announce)
-  local box = quantityBox()
-  if not (box and box.SetValue and count) then return false end
-  pcall(box.SetValue, box, count)
-  local got = box.GetValue and box:GetValue()
-  debugPrint("quantity set to", count, "box shows", tostring(got))
-  if announce and type(got) == "number" and got < count then
-    ns.Print(("The window set %d: it only lets you queue what your materials allow (the route wants %d)."):format(got, count))
-  end
-  return true
-end
-
-function ns.OpenRecipe(id, count, professionName)
-  local T = C_TradeSkillUI
-  if not (T and T.OpenRecipe) then ns.Print("This client has no profession window API."); return end
-
-  local function select()
-    local started, announced = GetTime(), false
-    local ticker
-    ticker = C_Timer.NewTicker(0.25, function()
-      local sel = selectedRecipe()
-      local elapsed = GetTime() - started
-      if T.IsDataSourceChanging and T.IsDataSourceChanging() and elapsed < 5 then return end -- still loading
-      if sel == id or (sel == nil and elapsed > 1.2) then
-        -- right recipe (or the window will not say, so give it a moment): fill the number, twice
-        ticker:Cancel()
-        if not fillCount(count, false) and count and not announced then
-          ns.Print(("Craft %d of it (the window has no quantity box here)."):format(count))
-        end
-        C_Timer.After(0.5, function() fillCount(count, true) end)
-        debugPrint("recipe", id, "selected:", tostring(sel), "after", ("%.1fs"):format(elapsed))
-      elseif elapsed > 6 then
-        ticker:Cancel()
-        ns.Print("Could not select that recipe in the window. Pick it by hand.")
-        debugPrint("gave up; the window shows", tostring(sel))
-      else
-        pcall(T.OpenRecipe, id) -- not there yet, or reset to the top of the list: ask again
-      end
-    end)
-  end
-
-  local function showing()
-    local base = T.GetBaseProfessionInfo and T.GetBaseProfessionInfo()
-    return T.IsTradeSkillReady and T.IsTradeSkillReady() and base and base.professionName == professionName
-  end
-  if showing() then return select() end
-
-  local prof = professionName and ns.Char().profs[professionName]
-  if prof and prof.id and T.OpenTradeSkill then pcall(T.OpenTradeSkill, prof.id) end
-  local tries = 0
-  local function wait()
-    tries = tries + 1
-    if showing() and ProfessionsFrame and ProfessionsFrame:IsShown() then
-      return C_Timer.After(0.4, select) -- give the list a moment to load
-    end
-    if tries < 16 then return C_Timer.After(0.25, wait) end
-    ns.Print(("Open your %s window first, then click again."):format(professionName or "profession"))
-  end
-  C_Timer.After(0.25, wait)
 end
 
 local function build()
@@ -250,21 +114,21 @@ local function build()
     b:SetScript("OnClick", onclick)
     return b
   end
-  frame.tProfit = button(12, 80, "Profit", function() tab = "profit"; setOffset(0) end)
-  frame.tLevel = button(94, 80, "Leveling", function() tab = "level"; setOffset(0) end)
-  frame.tRoute = button(176, 80, "Route", function() tab = "route"; setOffset(0) end)
+  frame.tProfit = button(12, 80, "Profit", function() S.tab = "profit"; setOffset(0) end)
+  frame.tLevel = button(94, 80, "Leveling", function() S.tab = "level"; setOffset(0) end)
+  frame.tRoute = button(176, 80, "Route", function() S.tab = "route"; setOffset(0) end)
   frame.tProf = button(262, 110, "Profession", function()
     local names = {}
     for n in pairs(ns.Char().profs) do names[#names + 1] = n end
     table.sort(names)
     if #names == 0 then return end
     local idx = 1
-    for i, n in ipairs(names) do if n == profName then idx = i % #names + 1 end end
-    profName = names[idx]
+    for i, n in ipairs(names) do if n == S.prof then idx = i % #names + 1 end end
+    S.prof = names[idx]
     setOffset(0)
   end)
   frame.tSort = button(376, 110, "", function()
-    if tab == "profit" then
+    if S.tab == "profit" then
       ns.SetOpt("sortKey", ns.Opt("sortKey") == "vendor" and "ah" or "vendor")
     else -- leveling and route: what the crafted item is assumed to sell for
       local nxt = { vendor = "ah", ah = "off", off = "vendor" }
@@ -273,7 +137,7 @@ local function build()
     ns.RefreshUI()
   end)
   frame.tAll = button(490, 152, "", function()
-    if tab == "route" then
+    if S.tab == "route" then
       ns.SetOpt("useTrainer", not ns.Opt("useTrainer"))
     else
       ns.SetOpt("showAll", not ns.Opt("showAll"))
@@ -295,7 +159,7 @@ local function build()
     ns.SetOpt("profitScope", all and "all" or "known")
     setOffset(0)
     -- the full list is only read from an open profession window, and only once "all" is on
-    local p = ns.Char().profs[profName or ""]
+    local p = ns.Char().profs[S.prof or ""]
     if all and p and not p.every and C_TradeSkillUI and C_TradeSkillUI.IsTradeSkillReady and C_TradeSkillUI.IsTradeSkillReady() then
       ns.Scan(false)
     end
@@ -353,7 +217,7 @@ local function build()
     b.text:SetJustifyH(just or "RIGHT")
     b:SetScript("OnClick", function(_, btn) ns.SortBy(i, btn) end)
     b:SetScript("OnEnter", function(self)
-      if tab == "route" then return end
+      if S.tab == "route" then return end
       GameTooltip:SetOwner(self, "ANCHOR_TOP")
       GameTooltip:AddLine("Click to sort, click again to reverse.", 1, 1, 1)
       GameTooltip:AddLine("Right-click: back to the default order.", 0.7, 0.7, 0.7)
@@ -381,7 +245,7 @@ local function build()
     c.bg = c:CreateTexture(nil, "BACKGROUND")
     c.bg:SetAllPoints()
     c.bg:SetColorTexture(0.08, 0.08, 0.1, 0.9)
-    c:SetHighlightTexture("Interface\QuestFrame\UI-QuestTitleHighlight")
+    c:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight")
     c.label = c:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     c.label:SetPoint("TOPLEFT", 6, -4)
     c.label:SetWidth(100)
@@ -481,7 +345,7 @@ local function recipeEntry(d, kind, key)
   if unlearned then
     local L = d.learn
     if L then
-      local mine = (ns.Char().profs[profName] or {}).skill or 0
+      local mine = (ns.Char().profs[S.prof] or {}).skill or 0
       local when = L.rank <= mine and "learn now" or ("|cffffd070skill %d, %d to go|r|cff80c0ff"):format(L.rank, L.rank - mine)
       local source = L.how == "trainer" and ("trainer " .. money(L.fee))
         or (L.how == "ah" and ("pattern " .. money(L.fee) .. " on the AH") or ("pattern " .. money(L.fee)))
@@ -493,7 +357,7 @@ local function recipeEntry(d, kind, key)
     end
   end
   local e = { icon = r.icon, data = d, sale = money(sale), sortName = r.name:lower(), sortSale = sale,
-    craft = { id = r.id, profession = profName, name = r.name, learnFirst = (d.learn ~= nil) or (unlearned and true or false) },
+    craft = { id = r.id, profession = S.prof, name = r.name, learnFirst = (d.learn ~= nil) or (unlearned and true or false) },
     quote = kind == "profit" and r or nil, -- Profit rows open the craft planner
     name = ("|cff%s%s|r%s"):format(unlearned and "80c0ff" or (DIFF_COLOR[r.diff] or "ffffff"), r.name, how) }
   if d.missing > 0 then
@@ -537,67 +401,21 @@ local function layout(isRoute)
   frame.bar:SetPoint("BOTTOMRIGHT", -8, 12)
 end
 
--- The route for the profession the window shows: plan, prof, name, target (nil when nothing is scanned).
--- Planning is heavy, so results are kept per setting until prices or scans change (ns.InvalidatePlan);
--- bag updates and scrolling reuse them.
-local planCache = {}
-function ns.InvalidatePlan() wipe(planCache) end
-
--- Forget the locked route for a profession; the next plan is a fresh one.
-function ns.ClearLock(name)
-  local locks = ns.Char().locks
-  if locks and name then locks[name] = nil end
-  ns.InvalidatePlan()
-end
-
-function ns.CurrentPlan()
-  local profs = ns.Char().profs
-  local name, prof = profName, profName and profs[profName]
-  if not prof then name, prof = next(profs) end
-  if not prof then return nil end
-  local target = ns.Opt("routeTarget") or prof.max
-  target = math.min(math.max(target, prof.skill + 1), prof.max)
-
-  -- A locked route keeps the recipe it chose for each skill point, so price changes do not
-  -- reshuffle a route you have started. Changing a setting that changes the route re-locks it.
-  local char = ns.Char()
-  char.locks = char.locks or {}
-  local useLock = ns.Opt("routeLock") and not ns.Opt("noLock")
-  local lockKey = table.concat({ tostring(ns.Opt("resale")), tostring(ns.Opt("useTrainer")),
-    ns.Opt("useRep") and "rep" or "base", tostring(ns.Opt("odds")), target }, "|")
-  local lock = useLock and char.locks[name] or nil
-  if lock and lock.key ~= lockKey then lock = nil; char.locks[name] = nil end
-
-  local key = table.concat({ name, prof.skill, prof.scanSkill or 0, prof.time or 0, lockKey,
-    lock and lock.t or "free", ns.Opt("noLock") and "n" or "l" }, "|")
-  local hit = planCache[key]
-  if not hit then
-    hit = ns.Plan(prof, target, nil, ns.Opt("useTrainer"), lock and ns.ForceFromPicks(lock.picks) or nil)
-    planCache[key] = hit
-    if useLock and not lock then
-      char.locks[name] = { key = lockKey, t = time(), picks = ns.PlanPicks(hit) }
-    end
-  end
-  return hit, prof, name, target
-end
-
-local showHistory = false
-
 local function historyEntries(list)
-  local h = ns.History(profName)
+  local h = ns.History(S.prof)
   if #h == 0 then return end
   local spent = 0
   for _, e in ipairs(h) do spent = spent + (e.cost or 0) end
   list[#list + 1] = {
-    name = ("|cff909090%s Completed steps (%d)|r"):format(showHistory and "v" or ">", #h),
+    name = ("|cff909090%s Completed steps (%d)|r"):format(S.showHistory and "v" or ">", #h),
     cost = "", sale = "", val = money(spent),
-    action = function() showHistory = not showHistory; ns.RefreshUI() end,
+    action = function() S.showHistory = not S.showHistory; ns.RefreshUI() end,
     tip = function(tt)
       tt:AddLine("Completed steps")
       tt:AddLine("What raised your skill, with what it cost at today's prices. Click to show or hide.", 1, 1, 1, true)
     end,
   }
-  if not showHistory then return end
+  if not S.showHistory then return end
   for i = #h, 1, -1 do
     local e = h[i]
     list[#list + 1] = {
@@ -608,8 +426,6 @@ local function historyEntries(list)
     }
   end
 end
-
-local showStock = false
 
 -- "Crafted stock": what the route has made and you are holding, worth what at a vendor and on the AH.
 local function stockEntries(list, plan)
@@ -622,16 +438,16 @@ local function stockEntries(list, plan)
   end
   list[#list + 1] = {
     icon = rows[1].icon,
-    name = ("|cff80e0ff%s Crafted stock|r  |cff909090(%d items)|r"):format(showStock and "v" or ">", items),
+    name = ("|cff80e0ff%s Crafted stock|r  |cff909090(%d items)|r"):format(S.showStock and "v" or ">", items),
     cost = "|cff909090vendor|r " .. money(v), sale = "|cff909090AH|r " .. money(a), val = money(best),
-    action = function() showStock = not showStock; ns.RefreshUI() end,
+    action = function() S.showStock = not S.showStock; ns.RefreshUI() end,
     tip = function(tt)
       tt:AddLine("Crafted stock")
       tt:AddLine("What this route has made and you are holding (bags and bank), and what it would fetch. The right-hand figure takes the better of vendor and AH for each item.", 1, 1, 1, true)
       tt:AddLine("AH values are after the AH cut and the deposit you would lose on listings that do not sell. Click to show or hide the items.", 0.7, 0.7, 0.7, true)
     end,
   }
-  if not showStock then return end
+  if not S.showStock then return end
   for _, r in ipairs(rows) do
     local vv, aa = r.count * r.vendor, r.ah and r.count * r.ah or nil
     list[#list + 1] = {
@@ -671,7 +487,7 @@ local function routeEntries(plan)
             cost = ("~%d crafts"):format(p.crafts),
             sale = p.unit and (money(p.unit) .. " each") or "",
             val = p.unit and money(p.unit * p.units) or "?",
-            craft = { id = p.recipe.id, count = p.crafts, profession = p.recipe.prof or profName, name = p.recipe.name },
+            craft = { id = p.recipe.id, count = p.crafts, profession = p.recipe.prof or S.prof, name = p.recipe.name },
             tip = function(tt)
               tt:AddLine(p.recipe.name)
               tt:AddLine(("%d needed for %s; making them costs less than buying them."):format(p.units + p.have, r.name), 1, 1, 1, true)
@@ -693,7 +509,7 @@ local function routeEntries(plan)
           seg.row.learn and DIFF_COLOR[0] or (DIFF_COLOR[r.diff] or "ffffff"), r.name,
           seg.row.learn and " |cff80c0ff(learn)|r" or ""),
         cost = ("~%d crafts"):format(n), sale = money(seg.row.cost), val = signed(-seg.cost),
-        craft = { id = r.id, count = n, profession = profName, name = r.name, learnFirst = seg.row.learn ~= nil },
+        craft = { id = r.id, count = n, profession = S.prof, name = r.name, learnFirst = seg.row.learn ~= nil },
       }
     end
   end
@@ -797,54 +613,54 @@ end
 
 redraw = function()
   if not frame or not frame:IsShown() then return end
-  layout(tab == "route")
+  layout(S.tab == "route")
   frame.rep:SetChecked(ns.Opt("useRep") and true or false)
   -- The current tab's button is greyed out and highlighted, so you can see where you are.
   for name, b in pairs({ profit = frame.tProfit, level = frame.tLevel, route = frame.tRoute }) do
-    local selected = tab == name
+    local selected = S.tab == name
     b:SetEnabled(not selected)
     if selected then b:LockHighlight() else b:UnlockHighlight() end
   end
   local profs = ns.Char().profs
-  if not profName or not profs[profName] then profName = next(profs) end
-  local prof = profName and profs[profName]
+  if not S.prof or not profs[S.prof] then S.prof = next(profs) end
+  local prof = S.prof and profs[S.prof]
   local key, showAll = ns.Opt("sortKey"), ns.Opt("showAll")
-  if tab == "profit" then
+  if S.tab == "profit" then
     frame.tSort:SetText(key == "ah" and "Sell: AH" or "Sell: vendor")
   else
     frame.tSort:SetText("Resale: " .. (ns.Opt("resale") or "vendor"))
   end
-  if tab == "route" then
+  if S.tab == "route" then
     frame.tAll:SetText(ns.Opt("useTrainer") and "Unlearned recipes: on" or "Unlearned recipes: off")
   else
     frame.tAll:SetText(showAll and "Show: everything" or "Show: useful only")
   end
   local count = 0
   for _ in pairs(profs) do count = count + 1 end
-  frame.tProf:SetText(profName or "Profession")
+  frame.tProf:SetText(S.prof or "Profession")
   frame.tProf:SetEnabled(count > 1)
-  local h = HEADERS[tab]
+  local h = HEADERS[S.tab]
   local titles = { h[1], h[2], h[3] or (key == "ah" and "AH (net)" or "Vendor"), h[4] }
-  if tab == "level" and ns.Opt("resale") == "off" then titles[4] = "Cost / skill-up" end
+  if S.tab == "level" and ns.Opt("resale") == "off" then titles[4] = "Cost / skill-up" end
   for i = 1, 4 do
-    local arrow = (tab ~= "route" and sortCol == i) and (sortAsc and " ^" or " v") or ""
+    local arrow = (S.tab ~= "route" and S.sortCol == i) and (S.sortAsc and " ^" or " v") or ""
     frame.hdr[i].text:SetText(titles[i] .. arrow)
   end
-  frame.search:SetShown(tab ~= "route")
-  frame.searchLabel:SetShown(tab ~= "route")
-  frame.scope:SetShown(tab == "profit" and prof ~= nil)
+  frame.search:SetShown(S.tab ~= "route")
+  frame.searchLabel:SetShown(S.tab ~= "route")
+  frame.scope:SetShown(S.tab == "profit" and prof ~= nil)
   frame.scope:SetText(ns.Opt("profitScope") == "all" and "Recipes: all" or "Recipes: known")
-  frame.replan:SetShown(tab == "route" and prof ~= nil)
+  frame.replan:SetShown(S.tab == "route" and prof ~= nil)
   frame.replan:SetEnabled(ns.Opt("routeLock") and true or false)
-  if tab ~= "route" or not prof then for _, c in ipairs(frame.cards) do c:Hide() end end
+  if S.tab ~= "route" or not prof then for _, c in ipairs(frame.cards) do c:Hide() end end
 
   local list = {}
   if prof then
-    if tab == "route" then
+    if S.tab == "route" then
       cache = cache or routeData()
       list = cache.list
-      local lock = ns.Char().locks and ns.Char().locks[profName]
-      frame.info:SetText(("%s %d/%d  -  route to %d%s"):format(profName, prof.skill, prof.max, cache.target,
+      local lock = ns.Char().locks and ns.Char().locks[S.prof]
+      frame.info:SetText(("%s %d/%d  -  route to %d%s"):format(S.prof, prof.skill, prof.max, cache.target,
         (lock and ns.Opt("routeLock") and ("  |cff909090(locked %s)|r"):format(date("%b %d", lock.t)) or "")
           .. ("  |cff909090%s odds|r"):format(ns.Opt("odds") == "typical" and "typical" or "worst-case")
           .. (function()
@@ -874,20 +690,20 @@ redraw = function()
         c:Show()
       end
     else
-      local allScope = tab == "profit" and ns.Opt("profitScope") == "all"
+      local allScope = S.tab == "profit" and ns.Opt("profitScope") == "all"
       local rows = ns.Evaluate(prof, nil, false, allScope)
       local src
-      if tab == "profit" then src = ns.ProfitRows(rows, key, showAll) else src = ns.LevelingRows(rows, showAll) end
+      if S.tab == "profit" then src = ns.ProfitRows(rows, key, showAll) else src = ns.LevelingRows(rows, showAll) end
       local q = frame.search:GetText():lower()
       for _, d in ipairs(src) do
-        if q == "" or matches(d, q) then list[#list + 1] = recipeEntry(d, tab, key) end
+        if q == "" or matches(d, q) then list[#list + 1] = recipeEntry(d, S.tab, key) end
       end
-      if sortCol then sortEntries(list) end
+      if S.sortCol then sortEntries(list) end
       local priced = 0
       for _, d in ipairs(rows) do if d.missing == 0 then priced = priced + 1 end end
       frame.info:SetText(("%s %d/%d  -  %d recipes, %d priced, %d shown%s"):format(
-        profName, prof.skill, prof.max, #prof.recipes, priced, #list,
-        (tab == "level" and ("  |cff909090%s odds|r"):format(ns.Opt("odds") == "typical" and "typical" or "worst-case") or "")
+        S.prof, prof.skill, prof.max, #prof.recipes, priced, #list,
+        (S.tab == "level" and ("  |cff909090%s odds|r"):format(ns.Opt("odds") == "typical" and "typical" or "worst-case") or "")
           .. (prof.dirty and "  |cffffd070new recipe: open the profession window to refresh|r" or "")
           .. ((allScope and not prof.every) and "  |cffffd070open the profession window to load all recipes|r" or "")))
     end
@@ -921,7 +737,7 @@ end
 -- Show the window on a given profession (the profession window's button uses this).
 function ns.OpenForProfession(name)
   if not frame then build() end
-  if name and ns.Char().profs[name] then profName = name end
+  if name and ns.Char().profs[name] then S.prof = name end
   if frame:IsShown() then
     ns.RefreshUI()
   else
@@ -929,6 +745,8 @@ function ns.OpenForProfession(name)
     ns.RefreshUI()
   end
 end
+
+function ns.UIScrollTop() offset = 0 end
 
 function ns.ToggleUI()
   if not frame then build() end

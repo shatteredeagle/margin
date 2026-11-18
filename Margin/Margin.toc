@@ -10,6 +10,7 @@
 ## IconTexture: Interface\Icons\INV_Misc_Coin_01
 
 Core.lua
+Theme.lua
 VendorData.lua
 TrainerData.lua
 TaughtData.lua
@@ -20,6 +21,7 @@ Taught.lua
 Scan.lua
 Calc.lua
 Progress.lua
+State.lua
 UI.lua
 Quote.lua
 Dump.lua
