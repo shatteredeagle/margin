@@ -746,7 +746,8 @@ ns.Layouts.register("classic", {
 local loader = CreateFrame("Frame")
 loader:RegisterEvent("GET_ITEM_INFO_RECEIVED")
 local queued
-loader:SetScript("OnEvent", function()
+loader:SetScript("OnEvent", function(_, _, itemID)
+  if not ns.ItemWasWaiting(itemID) then return end
   if queued or not (frame and frame:IsShown()) then return end
   queued = true
   C_Timer.After(0.5, function() queued = nil; ns.RedrawUI() end)

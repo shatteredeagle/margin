@@ -187,11 +187,13 @@ end
 -- Item names arrived: rebuild the text only. Never re-plans (ns.RefreshUI does), or every name that
 -- loads would plan every route again.
 function ns.RedrawUI()
+  local t0 = debugprofilestop()
   local L = Layouts.active()
   if L then (L.redraw or L.refresh)() end
   if ns.RefreshShopping then ns.RefreshShopping() end
   if ns.RefreshMerchant then ns.RefreshMerchant() end
   if ns.RefreshQuote then ns.RefreshQuote() end
+  ns.PerfNote("redraw", debugprofilestop() - t0)
 end
 
 -- The open main window of the chosen layout (companions dock beside it), or nil.

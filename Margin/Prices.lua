@@ -11,7 +11,9 @@ local WEEK = 7 * 86400
 -- (GET_ITEM_INFO_RECEIVED) trigger another redraw, and an item that does not exist in Forever never loads, so
 -- the window redrew itself in a loop.
 local asked = {}
+local waiting = {} -- items shown as "item N" that we are waiting on; GET_ITEM_INFO_RECEIVED fires for every addon's items
 local function requestOnce(itemID)
+  waiting[itemID] = true
   local last = asked[itemID]
   if not last or GetTime() - last > 60 then
     asked[itemID] = GetTime()
@@ -98,7 +100,7 @@ end
 -- Vendor sell price (what a merchant pays you). Item data may not be loaded yet.
 function ns.VendorSell(itemID)
   local _, _, _, _, _, _, _, _, _, _, sell = C_Item.GetItemInfo(itemID)
-  if sell == nil then requestOnce(itemID) end
+  if sell == nil then requestOnce(itemID) else waiting[itemID] = nil end
   return sell
 end
 
@@ -139,7 +141,17 @@ end
 -- An item's name, or nil while the game has not given it (asked for at most once a minute).
 function ns.ItemName(itemID)
   local n = C_Item.GetItemNameByID(itemID)
-  if n then return n end
+  if n then waiting[itemID] = nil; return n end
   requestOnce(itemID)
   return nil
+end
+
+-- GET_ITEM_INFO_RECEIVED arrived for itemID: true only when a name Margin is showing was waiting on it. The event
+-- fires for every addon's item loads (tooltips, bags, auction addons), and redrawing for all of them kept the
+-- windows rebuilding themselves all the time.
+function ns.ItemWasWaiting(itemID)
+  ns.PerfNote("item-info events", 0)
+  if not waiting[itemID] then return false end
+  ns.PerfNote("item-info events used", 0)
+  return true -- (cleared once the name is read: two windows ask this about the same event)
 end

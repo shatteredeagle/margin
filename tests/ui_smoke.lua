@@ -738,7 +738,13 @@ local realPlan, realInvalidate = ns.Plan, ns.InvalidatePlan
 ns.Plan = function(...) plans = plans + 1; return realPlan(...) end
 ns.InvalidatePlan = function(...) invalidations = invalidations + 1; return realInvalidate(...) end
 local oldEntries = win.list.entries
-for _ = 1, 5 do fire("GET_ITEM_INFO_RECEIVED", 4234, true) end
+-- other addons' item loads must not redraw anything: only an item Margin shows as "item N" does
+for _ = 1, 5 do fire("GET_ITEM_INFO_RECEIVED", 88888, true) end
+flush()
+assert(win.list.entries == oldEntries, "an unrelated item load did not redraw")
+assert(ns.ItemName(99999) == nil) -- unnamed: Margin now waits for it
+assert(ns.ItemWasWaiting(99999) and not ns.ItemWasWaiting(88888))
+for _ = 1, 5 do fire("GET_ITEM_INFO_RECEIVED", 99999, true) end
 flush()
 assert(win.list.entries ~= oldEntries, "the names redraw happened")
 assert(plans == 0 and invalidations == 0, ("GET_ITEM_INFO_RECEIVED re-planned (%d plans, %d invalidations)"):format(plans, invalidations))
