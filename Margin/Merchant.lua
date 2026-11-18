@@ -10,12 +10,20 @@ local _, ns = ...
 -- client refuses purchases made from a timer (ADDON_ACTION_FORBIDDEN), Margin
 -- switches to one chunk per click and remembers it (MarginDB.buyPerClick).
 
-local ROWS, ROW_H, WIDTH = 8, 38, 350
-local frame, offset, list = nil, 0, {}
+local W, T = ns.W, ns.T
+local WIDTH, HEIGHT = 360, 450
+local frame, list = nil, {}
 local buyList, sellList, mode = {}, {}, "buy" -- list is whichever the tab shows
 local busy = false
 local issued = {}     -- item -> { base, units, t }: bought, not yet visible in the bags
 local forbidden = false
+-- what went wrong (or right) last, shown as a banner in the window as well as in chat: { kind, text }
+local notice
+
+local function say(kind, text)
+  notice = { kind = kind, text = text }
+  ns.Print(text)
+end
 
 local function debug(...)
   if MarginDB and MarginDB.debug then ns.Print("[buy]", ...) end
@@ -147,7 +155,7 @@ local function doSell(rows)
     end
   end
   if #slots == 0 then
-    ns.Print("Found nothing to sell in your bags (are the stacks locked or in the bank?).")
+    say("warn", "Found nothing to sell in your bags (are the stacks locked or in the bank?).")
     return
   end
   local before = bagUnits(wanted)
@@ -160,11 +168,11 @@ local function doSell(rows)
       sellBusy = false
       local sold = before - bagUnits(wanted)
       if sold > 0 then
-        ns.Print(("Sold %d crafted items."):format(sold))
+        say("ok", ("Sold %d crafted items."):format(sold))
       elseif forbidden then
-        ns.Print("The game blocked selling from an addon here, so nothing was sold. Right-click the items to sell them yourself.")
+        say("err", "The game blocked selling from an addon here, so nothing was sold. Right-click the items to sell them yourself.")
       else
-        ns.Print("Nothing was sold. Is the vendor window still open? /margin debug shows more.")
+        say("warn", "Nothing was sold. Is the vendor window still open? /margin debug shows more.")
       end
       ns.RefreshMerchant()
     end)
@@ -177,7 +185,7 @@ local function doSell(rows)
     local info = C_Container.GetContainerItemInfo(t.bag, t.slot)
     if info and info.itemID == t.item and not info.isLocked then
       local ok, err = pcall(C_Container.UseContainerItem, t.bag, t.slot) -- with a vendor open this sells the stack
-      if not ok then ns.Print("Selling failed:", tostring(err)); return finishUp() end
+      if not ok then say("err", "Selling failed: " .. tostring(err)); return finishUp() end
       if MarginDB.debug then ns.Print("[sell]", t.bag, t.slot, t.item, "stack", info.stackCount) end
     end
     C_Timer.After(0.12, step)
@@ -281,9 +289,9 @@ local function finish(item, ok, why, bought)
   busy = false
   if why == "blocked" then
     MarginDB.buyPerClick = true
-    ns.Print("The game only allows one purchase per click here: click again for each stack.")
+    say("err", "The game only allows one purchase per click here: click again for each stack.")
   elseif not ok then
-    ns.Print(("Stopped (%s)."):format(why or "?"))
+    say("err", ("Stopped (%s)."):format(why or "?"))
   end
   if bought and bought > 0 then
     ns.Print(("Bought %d x %s."):format(bought, C_Item.GetItemNameByID(item) or item))
@@ -334,97 +342,99 @@ end
 -- Window
 ---------------------------------------------------------------------------
 
+local function setMode(m)
+  mode, armed, notice = m, nil, nil
+  if frame then frame.list.offset = 0 end
+  ns.RefreshMerchant()
+end
+
+local function makeRow(parent)
+  local row = CreateFrame("Frame", nil, parent)
+  row.sep = W.Solid(row, "white", "BORDER", 0.035)
+  row.sep:SetPoint("BOTTOMLEFT"); row.sep:SetPoint("BOTTOMRIGHT"); row.sep:SetHeight(1)
+  row.btn = CreateFrame("Button", nil, row)
+  row.btn:SetSize(28, 28)
+  row.btn:SetPoint("LEFT", 8, 0)
+  row.icon = row.btn:CreateTexture(nil, "ARTWORK")
+  row.icon:SetAllPoints()
+  row.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+  W.Tip(row.btn, function(tt)
+    if not row.entry then return false end
+    tt:SetItemByID(row.entry.item)
+  end, "ANCHOR_RIGHT")
+  row.action = W.Button(row, { width = 84, height = 20, onClick = function()
+    local d = row.entry
+    if not d then return end
+    notice = nil
+    if d.sell then arm(d.item, { d }) else buyOne(d) end -- keyed by item: the rows are rebuilt on every refresh
+  end })
+  row.action:SetPoint("RIGHT", -8, 0)
+  row.name = W.Text(row, "row", "text")
+  row.name:SetPoint("TOPLEFT", row.btn, "TOPRIGHT", 8, -1)
+  row.name:SetPoint("RIGHT", row.action, "LEFT", -6, 0)
+  row.pill = W.Pill(row)
+  row.sub = W.Text(row, "label", "dim")
+  row.sub:SetPoint("BOTTOMLEFT", row.btn, "BOTTOMRIGHT", 8, 1)
+  row.sub:SetPoint("RIGHT", row.action, "LEFT", -6, 0)
+  return row
+end
+
+local function fillRow(row, r)
+  row.icon:SetTexture(C_Item.GetItemIconByID(r.item))
+  row.name:SetText(ns.ItemName(r.item))
+  row.pill:Hide()
+  row.action:SetArmed(false)
+  if r.sell then
+    row.sub:SetText(("%d in bags · %s · step %s"):format(r.count, T.Money(r.value), table.concat(r.steps, ", "))
+      .. (r.ahBetter and ("  " .. T.C("warn", ("AH ~%s each"):format(T.Plain(r.ahNet)))) or ""))
+    W.TextColor(row.name, "text")
+    row.action:Show()
+    local isArmed = armed and armed.key == r.item
+    row.action:SetText(isArmed and ("Sure? %d"):format(r.count) or ("Sell %d"):format(r.count))
+    row.action:SetArmed(isArmed)
+    row.action:SetEnabled(not sellBusy)
+  elseif r.cheaper then
+    row.sub:SetText(("need %d, have %d"):format(r.need, r.have))
+    W.TextColor(row.name, "dim")
+    row.pill:SetKind("cheaper")
+    row.pill:ClearAllPoints()
+    row.pill:SetPoint("RIGHT", -10, 0)
+    row.pill:Show()
+    row.action:Hide()
+  elseif r.buy == 0 then
+    row.sub:SetText(("need %d, you have %d"):format(r.need, r.have))
+    W.TextColor(row.name, "profit")
+    row.pill:SetKind("done")
+    row.pill:ClearAllPoints()
+    row.pill:SetPoint("RIGHT", -10, 0)
+    row.pill:Show()
+    row.action:Hide()
+  else
+    row.sub:SetText(("need %d, have %d · %s"):format(r.need, r.have, T.Money(lotsFor(r) * r.price)))
+    W.TextColor(row.name, "text")
+    row.action:SetShown(buyable(r))
+    row.action:SetText(("Buy %d"):format(r.buy))
+    row.action:SetEnabled(not busy)
+  end
+end
+
 local function build()
-  frame = CreateFrame("Frame", "MarginMerchant", UIParent, "BasicFrameTemplateWithInset")
-  frame:SetSize(WIDTH, 134 + ROWS * ROW_H)
-  frame:SetFrameStrata("HIGH")
-  frame:EnableMouse(true)
+  frame = W.Window({ name = "MarginMerchant", title = "Margin: this vendor", width = WIDTH, height = HEIGHT, escape = false })
   frame:EnableMouseWheel(true)
-  frame:SetScript("OnMouseWheel", function(_, d)
-    offset = math.max(0, math.min(math.max(0, #list - ROWS), offset - d * 2))
-    ns.RefreshMerchant()
-  end)
-  frame:Hide()
-  frame.TitleText:SetText("Margin: buy for your route")
+  local top = frame.top
+  frame.mode = W.Segmented(frame, { options = { { "buy", "Buy for the route" }, { "sell", "Sell crafted items" } },
+    onChange = setMode })
+  frame.mode:SetPoint("TOPLEFT", 10, -(top + 6))
+  top = top + 32
+  frame.info = W.Banner(frame, WIDTH - 2)
+  frame.info:SetPoint("TOPLEFT", 1, -top)
+  frame.list = W.ScrollList(frame, { width = WIDTH - 10, height = 200, makeRow = makeRow, fill = fillRow,
+    heightOf = function() return 38 end })
+  frame:SetScript("OnMouseWheel", function(_, d) frame.list.Wheel(nil, d) end)
 
-  frame.info = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-  local function tabButton(x, text, m)
-    local b = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-    b:SetSize(80, 20)
-    b:SetPoint("TOPLEFT", x, -28)
-    b:SetText(text)
-    b:SetScript("OnClick", function() mode = m; offset = 0; armed = nil; ns.RefreshMerchant() end)
-    return b
-  end
-  frame.tBuy = tabButton(12, "Buy", "buy")
-  frame.tSell = tabButton(96, "Sell", "sell")
-
-  frame.skipAH = CreateFrame("CheckButton", nil, frame, "UICheckButtonTemplate")
-  frame.skipAH:SetSize(22, 22)
-  frame.skipAH:SetPoint("TOPLEFT", 186, -27)
-  frame.skipAH.text:SetText("Don't bother with the AH")
-  frame.skipAH.text:SetFontObject("GameFontNormalSmall")
-  frame.skipAH:SetScript("OnClick", function(self)
-    ns.SetOpt("sellAllVendor", self:GetChecked() and true or false)
-    ns.RefreshMerchant()
-  end)
-  frame.skipAH:SetScript("OnEnter", function(self)
-    GameTooltip:SetOwner(self, "ANCHOR_BOTTOMRIGHT")
-    GameTooltip:AddLine("Sell everything to the vendor")
-    GameTooltip:AddLine("Off: items the AH would pay more for (after the cut and the deposit you lose when a listing does not sell) are left out of \"Sell all\".", 1, 1, 1, true)
-    GameTooltip:AddLine("On: sell them all to the vendor anyway.", 0.7, 0.7, 0.7, true)
-    GameTooltip:Show()
-  end)
-  frame.skipAH:SetScript("OnLeave", GameTooltip_Hide)
-
-  frame.info:SetPoint("TOPLEFT", 14, -54)
-  frame.info:SetWidth(WIDTH - 28)
-  frame.info:SetJustifyH("LEFT")
-  frame.info:SetWordWrap(false)
-
-  frame.rows = {}
-  for i = 1, ROWS do
-    local row = CreateFrame("Frame", nil, frame)
-    row:SetSize(WIDTH - 24, ROW_H)
-    row:SetPoint("TOPLEFT", 12, -74 - (i - 1) * ROW_H)
-    row.btn = CreateFrame("Button", nil, row)
-    row.btn:SetSize(28, 28)
-    row.btn:SetPoint("LEFT", 0, 0)
-    row.icon = row.btn:CreateTexture(nil, "ARTWORK")
-    row.icon:SetAllPoints()
-    row.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-    row.btn:SetScript("OnEnter", function(self)
-      if not row.data then return end
-      GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-      GameTooltip:SetItemByID(row.data.item)
-      GameTooltip:Show()
-    end)
-    row.btn:SetScript("OnLeave", GameTooltip_Hide)
-    row.buy = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
-    row.buy:SetSize(78, 22)
-    row.buy:SetPoint("RIGHT", 0, 0)
-    row.buy:SetScript("OnClick", function()
-      local d = row.data
-      if not d then return end
-      if d.sell then arm(d.item, { d }) else buyOne(d) end -- keyed by item: the rows are rebuilt on every refresh
-    end)
-    row.name = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    row.name:SetPoint("TOPLEFT", row.btn, "TOPRIGHT", 8, 0)
-    row.name:SetPoint("RIGHT", row.buy, "LEFT", -6, 0)
-    row.name:SetJustifyH("LEFT")
-    row.name:SetWordWrap(false)
-    row.sub = row:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    row.sub:SetPoint("TOPLEFT", row.name, "BOTTOMLEFT", 0, -2)
-    row.sub:SetPoint("RIGHT", row.buy, "LEFT", -6, 0)
-    row.sub:SetJustifyH("LEFT")
-    row.sub:SetWordWrap(false)
-    frame.rows[i] = row
-  end
-
-  frame.all = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-  frame.all:SetSize(WIDTH - 28, 26)
-  frame.all:SetPoint("BOTTOM", 0, 30)
-  frame.all:SetScript("OnClick", function()
+  frame.err = W.Banner(frame, WIDTH - 2)
+  frame.all = W.Button(frame, { width = WIDTH - 20, height = 24, primary = true, onClick = function()
+    notice = nil
     if mode == "sell" then
       local rows = {}
       for _, r in ipairs(sellList) do if not r.ahBetter then rows[#rows + 1] = r end end
@@ -432,81 +442,68 @@ local function build()
     else
       buyAll()
     end
-  end)
-
-  frame.note = frame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-  frame.note:SetPoint("BOTTOMLEFT", 14, 10)
-  frame.note:SetWidth(WIDTH - 28)
-  frame.note:SetJustifyH("LEFT")
+  end })
+  frame.all:SetPoint("BOTTOMLEFT", 10, 52)
+  frame.skipAH = W.Checkbox(frame, { label = "Sell everything to the vendor",
+    onChange = function(v) ns.SetOpt("sellAllVendor", v and true or false); ns.RefreshMerchant() end,
+    tooltip = { "Sell everything to the vendor",
+      "Off: items the AH would pay more for (after the cut and the deposit you lose when a listing does not sell) are left out of \"Sell all\".",
+      "On: sell them all to the vendor anyway. Also in Settings." } })
+  frame.skipAH:SetPoint("BOTTOMLEFT", 12, 32)
+  frame.note = W.Text(frame, "label", "dim")
+  frame.note:SetPoint("BOTTOMLEFT", 12, 10)
+  frame.note:SetWidth(WIDTH - 24)
+  frame.note:SetWordWrap(true)
 end
 
 function ns.RefreshMerchant()
   if not (frame and frame:IsShown()) then return end
   compute()
-  frame.tBuy:SetEnabled(mode ~= "buy")
-  frame.tSell:SetEnabled(mode ~= "sell")
+  frame.mode:SetValue(mode)
   frame.skipAH:SetShown(mode == "sell")
-  frame.skipAH:SetChecked(ns.Opt("sellAllVendor") and true or false)
+  frame.skipAH:SetChecked(ns.Opt("sellAllVendor"))
   local cost, any = 0, false
+  local info
   if mode == "buy" then
     for _, r in ipairs(buyList) do
       if buyable(r) then any = true; cost = cost + lotsFor(r) * r.price end
     end
-    frame.info:SetText(any and ("Still to buy here: %s   (you have %s)"):format(ns.Money(cost), ns.Money(GetMoney()))
-      or "Nothing more to buy here for your route.")
+    info = any and ("Still to buy here %s   %s %s"):format(T.Money(cost), T.C("dim", "you have"), T.Money(GetMoney()))
+      or "Nothing more to buy here for your route."
   else
     local value = 0
     for _, r in ipairs(sellList) do
       if not r.ahBetter then any = true; value = value + r.value end
     end
-    frame.info:SetText(#sellList > 0 and ("Crafted items in your bags: %s at this vendor"):format(ns.Money(value))
-      or "No crafted items from your route in your bags.")
+    info = #sellList > 0 and ("Crafted items in your bags: %s at this vendor"):format(T.Money(value))
+      or "No crafted items from your route in your bags."
   end
-  offset = math.max(0, math.min(offset, math.max(0, #list - ROWS)))
-  for i = 1, ROWS do
-    local row, r = frame.rows[i], list[i + offset]
-    row.data = r
-    if r then
-      row.icon:SetTexture(C_Item.GetItemIconByID(r.item))
-      local n = C_Item.GetItemNameByID(r.item)
-      if not n then C_Item.RequestLoadItemDataByID(r.item) end
-      row.name:SetText(n or ("item " .. r.item))
-      if r.sell then
-        row.sub:SetText(("%d in bags  -  %s  (step %s)%s"):format(r.count, ns.Money(r.value), table.concat(r.steps, ", "),
-          r.ahBetter and ("  |cffffd070AH ~%s each|r"):format(ns.Money(r.ahNet)) or ""))
-        row.name:SetTextColor(1, 1, 1)
-        row.buy:SetShown(true)
-        row.buy:SetText(armed and armed.key == r.item and ("Sure? %d"):format(r.count) or ("Sell %d"):format(r.count))
-        row.buy:SetEnabled(not sellBusy)
-      elseif r.cheaper then
-        row.sub:SetText("|cffffd070the AH is cheaper|r")
-        row.name:SetTextColor(0.7, 0.7, 0.7)
-        row.buy:SetShown(false)
-      elseif r.buy == 0 then
-        row.sub:SetText(("need %d, you have %d"):format(r.need, r.have))
-        row.name:SetTextColor(0.5, 0.8, 0.5)
-        row.buy:SetShown(false)
-      else
-        row.sub:SetText(("need %d, have %d  -  %s"):format(r.need, r.have, ns.Money(lotsFor(r) * r.price)))
-        row.name:SetTextColor(1, 1, 1)
-        row.buy:SetShown(buyable(r))
-        row.buy:SetText(("Buy %d"):format(r.buy))
-        row.buy:SetEnabled(not busy)
-      end
-      row:Show()
-    else
-      row:Hide()
-    end
+  local top = frame.top + 32
+  local ih = frame.info:SetMessage("info", info)
+  local errH = 0
+  local bottom = 84 -- the button, the checkbox and the note
+  frame.list:ClearAllPoints()
+  frame.list:SetPoint("TOPLEFT", 5, -(top + ih))
+  if notice then
+    frame.err:SetPoint("BOTTOMLEFT", 1, bottom)
+    errH = frame.err:SetMessage(notice.kind, notice.text)
+  else
+    frame.err:Hide()
   end
+  frame.list:SetViewHeight(HEIGHT - (top + ih) - bottom - errH - 4)
+  frame.list:SetEntries(list)
   frame.all:SetShown(any)
+  frame.all:SetArmed(false)
   if mode == "sell" then
     frame.all:SetEnabled(any and not sellBusy)
     local allRows = {}
     for _, r in ipairs(sellList) do if not r.ahBetter then allRows[#allRows + 1] = r end end
     local n, v = sellTotals(allRows)
-    frame.all:SetText(sellBusy and "Selling..." or (armed and armed.key == "all"
-      and ("Click again: sell %d items for %s"):format(n, ns.Money(v)) or "Sell all crafted items"))
-    frame.note:SetText(any and "Click twice to confirm. Skips items the AH pays more for (unless you tick the box) and anything a later step uses." or "")
+    local isArmed = armed and armed.key == "all"
+    frame.all:SetText(sellBusy and "Selling..." or (isArmed
+      and ("Click again: sell %d items for %s"):format(n, T.Plain(v)) or "Sell all crafted items"))
+    frame.all:SetArmed(isArmed and not sellBusy)
+    frame.note:SetText(any and "Two clicks to confirm. Skips items the AH pays more for (unless you tick the box) and anything a later step uses." or "")
   else
     frame.all:SetEnabled(any and not busy)
     frame.all:SetText(busy and "Buying..." or (MarginDB.buyPerClick and "Buy next stack (click per stack)" or "Buy everything for the route"))
@@ -533,7 +530,7 @@ local function showHere()
   local anyBuy, anySell = false, #sellList > 0
   for _, r in ipairs(buyList) do if buyable(r) then anyBuy = true end end
   if not (anyBuy or anySell) or frame:IsShown() then return end
-  mode = anyBuy and "buy" or "sell"
+  mode, notice = anyBuy and "buy" or "sell", nil
   compute()
   frame:SetParent(MerchantFrame)
   frame:ClearAllPoints()
@@ -567,7 +564,7 @@ ev:SetScript("OnEvent", function(_, event, a)
     record()
     ns.RefreshMerchant()
   elseif event == "MERCHANT_CLOSED" then
-    issued, busy = {}, false
+    issued, busy, notice = {}, false, nil
     if frame then frame:Hide() end
   else
     ns.RefreshMerchant()

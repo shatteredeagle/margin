@@ -29,6 +29,8 @@ jobs:
           if [ -n "$unknown" ]; then echo "Unknown globals (add real WoW APIs to tests/allowed_globals.txt):"; echo "$unknown"; exit 1; fi
       - name: Offline tests (route planner, pricing)
         run: lua5.1 tests/calc_test.lua | tee /tmp/tests.out && grep -q "^calc ok$" /tmp/tests.out
+      - name: UI smoke test (every window built and clicked through in a stubbed WoW API)
+        run: lua5.1 tests/ui_smoke.lua | tee /tmp/ui.out && grep -q "^ui smoke ok$" /tmp/ui.out
 
   release:
     needs: test

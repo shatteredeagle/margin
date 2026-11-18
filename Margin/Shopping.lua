@@ -6,8 +6,9 @@ local _, ns = ...
 -- auction house buys: select the browse result, then send the quantity event once
 -- the listings arrive.
 
-local ROWS, ROW_H, WIDTH = 10, 36, 340
-local frame, offset, list = nil, 0, {}
+local W, T = ns.W, ns.T
+local WIDTH, HEIGHT = 360, 420
+local frame, list = nil, {}
 local searching = {} -- item -> count to fill in when its listings arrive
 local keyWait        -- item whose auction key the client is still loading
 
@@ -187,69 +188,101 @@ local function compute()
   return cost
 end
 
-local function build()
-  frame = CreateFrame("Frame", "MarginShopping", UIParent, "BasicFrameTemplateWithInset")
-  frame:SetSize(WIDTH, 82 + ROWS * ROW_H)
-  frame:SetFrameStrata("HIGH")
-  frame:EnableMouse(true)
-  frame:EnableMouseWheel(true)
-  frame:SetMovable(true)
-  frame:RegisterForDrag("LeftButton")
-  frame:SetScript("OnDragStart", frame.StartMoving)
-  frame:SetScript("OnDragStop", frame.StopMovingOrSizing)
-  frame:SetScript("OnMouseWheel", function(_, d)
-    offset = math.max(0, math.min(math.max(0, #list - ROWS), offset - d * 2))
-    ns.RefreshShopping()
-  end)
-  frame:Hide()
-  frame.TitleText:SetText("Margin shopping list")
+local GROUPS = { { "ah", "Auction house" }, { "vendor", "Vendor" }, { "done", "Done" } }
 
-  frame.info = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-  frame.info:SetPoint("TOPLEFT", 14, -32)
-  frame.info:SetWidth(WIDTH - 28)
-  frame.info:SetJustifyH("LEFT")
-  frame.info:SetWordWrap(false)
+local function makeRow(parent)
+  local row = CreateFrame("Frame", nil, parent)
+  row.band = W.Solid(row, "panel2")
+  row.band:SetAllPoints()
+  row.bandLine = W.Solid(row, "border", "BORDER")
+  row.bandLine:SetPoint("TOPLEFT"); row.bandLine:SetPoint("TOPRIGHT"); row.bandLine:SetHeight(1)
+  row.title = W.Text(row, "small", "accent")
+  row.title:SetPoint("LEFT", 8, 0)
+  row.total = W.Text(row, "row", "text", "RIGHT")
+  row.total:SetPoint("RIGHT", -8, 0)
+  row.sep = W.Solid(row, "white", "BORDER", 0.035)
+  row.sep:SetPoint("BOTTOMLEFT"); row.sep:SetPoint("BOTTOMRIGHT"); row.sep:SetHeight(1)
+  row.btn = CreateFrame("Button", nil, row)
+  row.btn:SetSize(28, 28)
+  row.btn:SetPoint("LEFT", 8, 0)
+  row.icon = row.btn:CreateTexture(nil, "ARTWORK")
+  row.icon:SetAllPoints()
+  row.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+  W.Tip(row.btn, function(tt)
+    if not (row.entry and row.entry.item) then return false end
+    tt:SetItemByID(row.entry.item)
+  end, "ANCHOR_RIGHT")
+  row.search = W.Button(row, { width = 84, height = 20, icon = "search", text = "Search",
+    onClick = function() if row.entry and row.entry.item then search(row.entry.item, row.entry.buy) end end,
+    tooltip = { "Search", "Opens the item in the auction house's buy view with the count filled in. Buying is your click." } })
+  row.search:SetPoint("RIGHT", -8, 0)
+  row.name = W.Text(row, "row", "text")
+  row.name:SetPoint("TOPLEFT", row.btn, "TOPRIGHT", 8, -1)
+  row.name:SetPoint("RIGHT", row.search, "LEFT", -6, 0)
+  row.have = W.ProgressBar(row, { width = 56, height = 5, color = "profit" })
+  row.have:SetPoint("BOTTOMLEFT", row.btn, "BOTTOMRIGHT", 8, 3)
+  row.sub = W.Text(row, "label", "dim")
+  row.sub:SetPoint("LEFT", row.have, "RIGHT", 6, 0)
+  row.sub:SetPoint("RIGHT", row.search, "LEFT", -6, 0)
+  row.note = W.Text(row, "label", "dim", "RIGHT")
+  row.note:SetPoint("RIGHT", -10, 0)
+  return row
+end
 
-  frame.note = frame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-  frame.note:SetPoint("BOTTOMLEFT", 14, 10)
-  frame.note:SetWidth(WIDTH - 28)
-  frame.note:SetJustifyH("LEFT")
-
-  frame.rows = {}
-  for i = 1, ROWS do
-    local row = CreateFrame("Frame", nil, frame)
-    row:SetSize(WIDTH - 24, ROW_H)
-    row:SetPoint("TOPLEFT", 12, -52 - (i - 1) * ROW_H)
-    row.btn = CreateFrame("Button", nil, row)
-    row.btn:SetSize(28, 28)
-    row.btn:SetPoint("LEFT", 0, 0)
-    row.icon = row.btn:CreateTexture(nil, "ARTWORK")
-    row.icon:SetAllPoints()
-    row.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-    row.btn:SetScript("OnEnter", function(self)
-      if not row.data then return end
-      GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-      GameTooltip:SetItemByID(row.data.item)
-      GameTooltip:Show()
-    end)
-    row.btn:SetScript("OnLeave", GameTooltip_Hide)
-    row.search = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
-    row.search:SetSize(64, 22)
-    row.search:SetPoint("RIGHT", 0, 0)
-    row.search:SetText("Search")
-    row.search:SetScript("OnClick", function() if row.data then search(row.data.item, row.data.buy) end end)
-    row.name = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    row.name:SetPoint("TOPLEFT", row.btn, "TOPRIGHT", 8, 0)
-    row.name:SetPoint("RIGHT", row.search, "LEFT", -6, 0)
-    row.name:SetJustifyH("LEFT")
-    row.name:SetWordWrap(false)
-    row.sub = row:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    row.sub:SetPoint("TOPLEFT", row.name, "BOTTOMLEFT", 0, -2)
-    row.sub:SetPoint("RIGHT", row.search, "LEFT", -6, 0)
-    row.sub:SetJustifyH("LEFT")
-    row.sub:SetWordWrap(false)
-    frame.rows[i] = row
+local function fillRow(row, e)
+  local band = e.kind == "section"
+  row.band:SetShown(band); row.bandLine:SetShown(band); row.title:SetShown(band); row.total:SetShown(band)
+  row.sep:SetShown(not band)
+  for _, f in ipairs({ row.btn, row.name, row.have, row.sub }) do f:SetShown(not band) end
+  if band then
+    row.search:Hide(); row.note:Hide()
+    row.title:SetText(e.title:upper() .. "  " .. T.C("dim", "(" .. e.count .. ")"))
+    row.total:SetText(e.total and T.Money(e.total) or "")
+    return
   end
+  local d = e
+  row.icon:SetTexture(C_Item.GetItemIconByID(d.item))
+  local mail = d.transit > 0 and ("  " .. T.C("unlearned", ("(+%d on the way)"):format(d.transit))) or ""
+  row.name:SetText(ns.ItemName(d.item) .. mail)
+  W.TextColor(row.name, d.kind == "done" and "profit" or (d.kind == "vendor" and "dim" or "text"))
+  row.have:SetValue(d.have, d.need)
+  if d.kind == "done" then
+    row.sub:SetText(("%d / %d"):format(d.have, d.need))
+  else
+    row.sub:SetText(("%d / %d · buy %d · %s each"):format(d.have, d.need, d.buy, T.Money(d.unit))
+      .. (d.short > 0 and ("  " .. T.C("loss", ("only %d on the AH"):format(d.sup))) or ""))
+  end
+  row.search:SetShown(d.kind == "ah")
+  row.search:SetText("Search " .. d.buy)
+  row.search:SetEnabled(frame.open and true or false)
+  row.note:SetShown(d.kind == "vendor")
+  row.note:SetText("buy at a vendor")
+end
+
+local function build()
+  frame = W.Window({ name = "MarginShopping", title = "Shopping list", width = WIDTH, height = HEIGHT, escape = false })
+  frame:EnableMouseWheel(true)
+  local head = W.Panel(frame, "panel", false)
+  head:SetPoint("TOPLEFT", 1, -frame.top)
+  head:SetPoint("TOPRIGHT", -1, -frame.top)
+  head:SetHeight(26)
+  head.line = W.Solid(head, "border", "BORDER")
+  head.line:SetPoint("BOTTOMLEFT"); head.line:SetPoint("BOTTOMRIGHT"); head.line:SetHeight(1)
+  frame.info = W.Text(head, "small", "text")
+  frame.info:SetPoint("LEFT", 10, 0)
+  frame.left = W.Text(head, "small", "text", "RIGHT")
+  frame.left:SetPoint("RIGHT", -10, 0)
+  frame.list = W.ScrollList(frame, { width = WIDTH - 10, height = HEIGHT - frame.top - 26 - 30,
+    makeRow = makeRow, fill = fillRow,
+    heightOf = function(e) return e.kind == "section" and 22 or 38 end })
+  frame.list:SetPoint("TOPLEFT", 5, -(frame.top + 27))
+  frame:SetScript("OnMouseWheel", function(_, d) frame.list.Wheel(nil, d) end)
+  local foot = W.Panel(frame, "panel", false)
+  foot:SetPoint("BOTTOMLEFT", 1, 1); foot:SetPoint("BOTTOMRIGHT", -1, 1); foot:SetHeight(24)
+  foot.line = W.Solid(foot, "border", "BORDER")
+  foot.line:SetPoint("TOPLEFT"); foot.line:SetPoint("TOPRIGHT"); foot.line:SetHeight(1)
+  frame.note = W.Text(foot, "label", "dim")
+  frame.note:SetPoint("LEFT", 10, 0)
 end
 
 local function wantOpen() -- anything left to buy at the AH?
@@ -260,38 +293,31 @@ end
 function ns.RefreshShopping()
   if not (frame and frame:IsShown()) then return end
   local cost = compute()
-  local open = ahOpen()
+  frame.open = ahOpen()
   local _, prof, name, target = ns.CurrentPlan()
-  frame.info:SetText(prof and ("%s %d to %d  -  still to buy: %s"):format(name, prof.skill, target, ns.Money(cost))
+  frame.info:SetText(prof and ("%s %s to %s"):format(name, T.C("accent", prof.skill), T.C("accent", target))
     or "Open a profession window once to scan it.")
-  frame.note:SetText(open and "Search fills in the count; buying is your click."
+  frame.left:SetText(prof and (T.C("dim", "still to buy ") .. T.Money(cost)) or "")
+  frame.note:SetText(frame.open and "Search fills in the count; buying is your click."
     or "Open the auction house to search.")
-  offset = math.max(0, math.min(offset, math.max(0, #list - ROWS)))
-  for i = 1, ROWS do
-    local row, d = frame.rows[i], list[i + offset]
-    row.data = d
-    if d then
-      row.icon:SetTexture(C_Item.GetItemIconByID(d.item))
-      local n = C_Item.GetItemNameByID(d.item)
-      if not n then C_Item.RequestLoadItemDataByID(d.item) end
-      row.name:SetText(n or ("item " .. d.item))
-      local mail = d.transit > 0 and ("  |cff80c0ff(+%d on the way)|r"):format(d.transit) or ""
-      if d.kind == "done" then
-        row.sub:SetText(("|cff60ff60done|r  need %d, have %d%s"):format(d.need, d.have, mail))
-        row.name:SetTextColor(0.5, 0.8, 0.5)
-      else
-        row.sub:SetText(("buy %d  (need %d, have %d)  %s each%s%s"):format(d.buy, d.need, d.have, ns.Money(d.unit), mail,
-          d.short > 0 and ("  |cffff6060only %d on the AH|r"):format(d.sup) or ""))
-        row.name:SetTextColor(1, 1, 1)
+  -- grouped: auction house, vendor, done; each with a band and its total
+  local entries = {}
+  for _, g in ipairs(GROUPS) do
+    local rows, total = {}, 0
+    for _, r in ipairs(list) do
+      if r.kind == g[1] then
+        rows[#rows + 1] = r
+        local c = r.unit and r.unit * r.buy or 0
+        if r.kind == "ah" and ns.WalkCost then c = ns.WalkCost(r.item, r.buy) or c end
+        total = total + c
       end
-      row.search:SetShown(d.kind == "ah")
-      row.search:SetEnabled(open)
-      if d.kind == "vendor" then row.sub:SetText(row.sub:GetText() .. "  |cff80c0ffvendor|r") end
-      row:Show()
-    else
-      row:Hide()
+    end
+    if #rows > 0 then
+      entries[#entries + 1] = { kind = "section", title = g[2], count = #rows, total = g[1] ~= "done" and total or nil }
+      for _, r in ipairs(rows) do entries[#entries + 1] = r end
     end
   end
+  frame.list:SetEntries(entries)
 end
 
 function ns.ToggleShopping()

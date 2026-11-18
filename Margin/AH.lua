@@ -1,8 +1,13 @@
 local _, ns = ...
 
--- A button on the auction house that searches only the items Margin cannot price yet (no
--- full scan): through Auctionator when it is installed, else with Margin's own search. Shift-click also searches unpriced results.
-local button
+-- The Margin strip on the auction house: one fixed-width strip on the AH's top edge with the brand,
+-- the profession filter for lookups, Margin's own full scan, the shopping list, and the lookup that
+-- searches only the items Margin cannot price yet (through Auctionator when it is installed, else
+-- with Margin's own search). Shift-click the lookup to include unpriced crafted results, right-click
+-- to count already-searched items again. Each segment has a fixed width, so changing counts and
+-- states never move the others.
+local W, T = ns.W, ns.T
+local strip -- the strip (built the first time the AH opens)
 
 -- Most items looked up per click: Auctionator's search and the AH's own throttling both slow down
 -- badly with hundreds of terms, so a long list is worked through in rounds.
@@ -44,15 +49,7 @@ local MAX_ROUNDS = 30
 local nameTries = 0
 local PAUSE = 1.5
 
-local function updateText()
-  if not button then return end
-  if running then
-    button:SetText(("Margin: %d left (click to stop)"):format(#missing(runOutputs)))
-  else
-    button:SetText(("Margin: %d to look up"):format(#missing(false)))
-  end
-end
-
+local updateText -- below, once the strip exists
 local function markSearched(ids)
   MarginDB.searched = MarginDB.searched or {}
   local now = time()
@@ -90,12 +87,12 @@ local function explainEmpty(includeOutputs)
     scanProfession(), true)
   local only = scanProfession()
   if #all == 0 then
-    ns.Print(only and ("Nothing unpriced for " .. only .. ". (Scan: button cycles professions.)")
+    ns.Print(only and ("Nothing unpriced for " .. only .. ". (Scan: on the Margin strip cycles professions.)")
       or "Nothing unpriced: every recipe you have is priced.")
   else
     ns.Print(("Nothing to look up: %d unpriced items were already searched in the last 12 hours and have no listing%s."):format(
       #all, only and (" (" .. only .. " only)") or ""))
-    ns.Print("Right-click the button to count them again.")
+    ns.Print("Right-click Look up to count them again.")
   end
 end
 
@@ -184,99 +181,128 @@ local function search(includeOutputs)
   startRound()
 end
 
+local function fullLabel()
+  local state, v = ns.FullScanState()
+  if state == "running" then return T.C("warn", ("Scanning %d%%"):format(math.floor(v * 100))) end
+  if state == "cooldown" then return T.C("dim", ("Full scan %d:%02d"):format(math.floor(v / 60), math.floor(v) % 60)) end
+  return "Full scan"
+end
+
+local function scanLabel()
+  return T.C("dim", "Scan:") .. " " .. (scanProfession() or "all professions")
+end
+
+-- AH items the route still has to buy.
+local function toBuyHere()
+  local plan = ns.CurrentPlan()
+  if not plan then return 0 end
+  local n = 0
+  for _, it in ipairs(plan.shop) do
+    if it.src == "ah" and math.max(0, it.count - (it.recipe and 0 or ns.Owned(it.item))) > 0 then n = n + 1 end
+  end
+  return n
+end
+
+-- One flat segment of the strip: a button with an optional glyph and a fixed width.
+local function segment(width, glyph, onClick, rightClick)
+  local b = CreateFrame("Button", nil, strip)
+  b:SetSize(width, 26)
+  b.hl = W.Solid(b, "panel2")
+  b.hl:SetAllPoints()
+  b.hl:Hide()
+  b.sep = W.Solid(b, "border", "BORDER")
+  b.sep:SetPoint("TOPRIGHT"); b.sep:SetPoint("BOTTOMRIGHT"); b.sep:SetWidth(1)
+  local x = 10
+  if glyph then
+    b.glyph = W.Glyph(b, glyph, 12, "accent")
+    b.glyph:SetPoint("LEFT", 10, 0)
+    x = 27
+  end
+  b.text = W.Text(b, "small", "text")
+  b.text:SetPoint("LEFT", x, 0)
+  b.text:SetPoint("RIGHT", -8, 0)
+  if onClick then
+    if rightClick then b:RegisterForClicks("LeftButtonUp", "RightButtonUp") end
+    b:SetScript("OnClick", onClick)
+    b:SetScript("OnEnter", function() b.hl:Show() end)
+    b:SetScript("OnLeave", function() b.hl:Hide() end)
+  end
+  local prev = strip.segments[#strip.segments]
+  if prev then b:SetPoint("LEFT", prev, "RIGHT", 0, 0) else b:SetPoint("LEFT", 0, 0) end
+  strip.segments[#strip.segments + 1] = b
+  return b
+end
+
+updateText = function()
+  if not strip then return end
+  if running then
+    strip.lookup.text:SetText(T.C("warn", ("Looking up · %d left · Stop"):format(#missing(runOutputs))))
+  else
+    local n = #missing(false)
+    strip.lookup.text:SetText((n > 0 and T.C("warn", n) or T.C("dim", n)) .. " unpriced · Look up")
+  end
+  strip.scan.text:SetText(scanLabel())
+  local buy = toBuyHere()
+  strip.list.text:SetText("Shopping list " .. (buy > 0 and T.C("accent", "(" .. buy .. ")") or T.C("dim", "(0)")))
+end
+
 local function build(parent)
-  button = CreateFrame("Button", "MarginAHButton", parent, "UIPanelButtonTemplate")
-  button:SetSize(170, 22)
-  button:SetPoint("BOTTOMRIGHT", parent, "TOPRIGHT", -8, 2)
-  button:RegisterForClicks("LeftButtonUp", "RightButtonUp")
-  button:SetScript("OnClick", function(_, btn)
+  strip = W.Panel(parent, "panel", "border")
+  _G.MarginAHStrip = strip
+  strip:SetSize(740, 26)
+  strip:SetPoint("BOTTOMLEFT", parent, "TOPLEFT", 4, 2)
+  strip:SetFrameLevel(parent:GetFrameLevel() + 10)
+  strip.segments = {}
+
+  strip.brand = segment(84, "logo")
+  W.TextColor(strip.brand.text, "accent")
+  strip.brand.text:SetText("Margin")
+
+  -- which profession the lookup covers: all of them, or one
+  strip.scan = segment(196, "chev", function()
+    local names = ns.Professions()
+    local cur, nxt = scanProfession(), nil
+    if not cur then nxt = names[1] else
+      for i, n in ipairs(names) do if n == cur then nxt = names[i + 1] end end
+    end
+    ns.SetOpt("scanProf", nxt) -- past the last one: back to all
+    updateText()
+  end)
+  W.TipText(strip.scan, "What to look up", "Limits the lookup to one profession. Click to cycle through all of them.")
+
+  -- Margin's own full auction house scan: prices and supply for everything it watches, in one go
+  strip.full = segment(124, nil, function() ns.FullScan() end)
+  strip.full.text:SetText(fullLabel())
+  local acc = 0
+  strip.full:SetScript("OnUpdate", function(self, elapsed)
+    acc = acc + elapsed
+    if acc > 0.5 then acc = 0; self.text:SetText(fullLabel()) end
+  end)
+  W.TipText(strip.full, "Full scan", "Reads the whole auction house once and records the price and how much is for sale of every item Margin watches (your reagents, products and patterns). The AH allows one every 15 minutes, and the game may stutter for a moment.",
+    "Auctionator's prices are still used when it is installed, unless this is newer.")
+
+  strip.list = segment(146, "cart", function() ns.ToggleShopping() end)
+  W.TipText(strip.list, "Shopping list", "What the route still needs, with a Search button per item that fills in the count. The number is how many items are still to buy here.")
+
+  strip.lookup = segment(190, "ask", function(_, btn)
     if btn == "RightButton" then
       MarginDB.searched = nil -- forget what was already searched
       updateText()
       return ns.Print("Forgot earlier searches; every unpriced item counts again.")
     end
     search(IsShiftKeyDown())
-  end)
-  button:SetScript("OnEnter", function(self)
-    GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
-    GameTooltip:AddLine("Margin")
-    GameTooltip:AddLine("Looks up what Margin needs: items it has no price for, and items your route buys here whose listings it has not seen lately (to know how much is for sale).", 1, 1, 1, true)
-    GameTooltip:AddLine("Shift-click: also unpriced crafted results.", 0.7, 0.7, 0.7, true)
+  end, true)
+  strip.lookup.sep:Hide()
+  W.Tip(strip.lookup, function(tt)
+    tt:AddLine("Look up")
+    tt:AddLine("Looks up what Margin needs: items it has no price for, and items your route buys here whose listings it has not seen lately (to know how much is for sale). Click again to stop.", 1, 1, 1, true)
+    tt:AddLine("Shift-click: also unpriced crafted results.", 0.7, 0.7, 0.7, true)
     local none = ns.SearchedUnpriced()
     if none > 0 then
-      GameTooltip:AddLine(("%d searched in the last 12 hours have no listing and are not counted."):format(none), 1, 0.82, 0, true)
-      GameTooltip:AddLine("Right-click: count them again.", 0.7, 0.7, 0.7, true)
+      tt:AddLine(("%d searched in the last 12 hours have no listing and are not counted."):format(none), 1, 0.82, 0, true)
     end
-    GameTooltip:Show()
+    tt:AddLine("Right-click: count searched items again.", 0.7, 0.7, 0.7, true)
   end)
-  button:SetScript("OnLeave", GameTooltip_Hide)
-end
-
-local fullButton
-local function fullLabel()
-  local state, v = ns.FullScanState()
-  if state == "running" then return ("Scanning %d%%"):format(math.floor(v * 100)) end
-  if state == "cooldown" then return ("Full scan (%d:%02d)"):format(math.floor(v / 60), math.floor(v) % 60) end
-  return "Full scan"
-end
-
-local scanButton
-local function scanLabel()
-  return "Scan: " .. (scanProfession() or "all")
-end
-
-local listButton
-local function buildList(parent)
-  listButton = CreateFrame("Button", "MarginAHListButton", parent, "UIPanelButtonTemplate")
-  listButton:SetSize(110, 22)
-  listButton:SetPoint("RIGHT", button, "LEFT", -4, 0)
-  listButton:SetText("Shopping list")
-  listButton:SetScript("OnClick", function() ns.ToggleShopping() end)
-
-  -- which profession "Margin: N unpriced" looks up: all of them, or one
-  scanButton = CreateFrame("Button", "MarginAHScanButton", parent, "UIPanelButtonTemplate")
-  scanButton:SetSize(140, 22)
-  scanButton:SetPoint("RIGHT", listButton, "LEFT", -4, 0)
-  scanButton:SetText(scanLabel())
-  scanButton:SetScript("OnClick", function()
-    local names = {}
-    for n in pairs(ns.Char().profs) do names[#names + 1] = n end
-    table.sort(names)
-    local cur, nxt = scanProfession(), nil
-    if not cur then nxt = names[1] else
-      for i, n in ipairs(names) do if n == cur then nxt = names[i + 1] end end
-    end
-    ns.SetOpt("scanProf", nxt) -- past the last one: back to all
-    scanButton:SetText(scanLabel())
-    updateText()
-  end)
-  scanButton:SetScript("OnEnter", function(self)
-    GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
-    GameTooltip:AddLine("What to look up")
-    GameTooltip:AddLine("Limits \"Margin: N unpriced\" to one profession. Click to cycle through all of them.", 1, 1, 1, true)
-    GameTooltip:Show()
-  end)
-  scanButton:SetScript("OnLeave", GameTooltip_Hide)
-
-  -- Margin's own full auction house scan: prices and supply for everything it watches, in one go
-  fullButton = CreateFrame("Button", "MarginAHFullButton", parent, "UIPanelButtonTemplate")
-  fullButton:SetSize(120, 22)
-  fullButton:SetPoint("RIGHT", scanButton, "LEFT", -4, 0)
-  fullButton:SetText(fullLabel())
-  fullButton:SetScript("OnClick", function() ns.FullScan() end)
-  local acc = 0
-  fullButton:SetScript("OnUpdate", function(self, elapsed)
-    acc = acc + elapsed
-    if acc > 0.5 then acc = 0; self:SetText(fullLabel()) end
-  end)
-  fullButton:SetScript("OnEnter", function(self)
-    GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
-    GameTooltip:AddLine("Full scan")
-    GameTooltip:AddLine("Reads the whole auction house once and records the price and how much is for sale of every item Margin watches (your reagents, products and patterns). The AH allows one every 15 minutes, and the game may stutter for a moment.", 1, 1, 1, true)
-    GameTooltip:AddLine("Auctionator's prices are still used when it is installed, unless this is newer.", 0.7, 0.7, 0.7, true)
-    GameTooltip:Show()
-  end)
-  fullButton:SetScript("OnLeave", GameTooltip_Hide)
 end
 
 local function onShow(tries)
@@ -285,16 +311,14 @@ local function onShow(tries)
     if tries < 5 then C_Timer.After(0.2, function() onShow(tries + 1) end) end
     return
   end
-  if not button then build(parent) end
-  if not listButton then buildList(parent) end
-  if scanButton then scanButton:SetText(scanLabel()) end
+  if not strip then build(parent) end
   updateText()
   -- with no Auctionator there is no other source of prices: scan by itself when the AH opens (once the
   -- 15-minute limit allows), unless turned off with /margin autoscan off
   local auto = ns.Opt("autoFullScan")
   if auto == nil then auto = not Auctionator end
   if auto and ns.FullScanState() == "ready" then C_Timer.After(2, function() if ns.FullScanState() == "ready" then ns.FullScan() end end) end
-  button:Show()
+  strip:Show()
 end
 
 local f = CreateFrame("Frame")

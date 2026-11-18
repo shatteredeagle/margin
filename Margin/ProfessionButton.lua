@@ -102,20 +102,13 @@ local function ensure()
   local parent = book()
   if not parent then return end
   if not button then
-    button = CreateFrame("Button", "MarginProfessionButton", parent, "UIPanelButtonTemplate")
-    button:SetSize(72, 22)
-    button:SetText("Margin")
-    button:SetScript("OnClick", function()
-      local base = C_TradeSkillUI and C_TradeSkillUI.GetBaseProfessionInfo and C_TradeSkillUI.GetBaseProfessionInfo()
-      ns.OpenForProfession(base and base.professionName)
-    end)
-    button:SetScript("OnEnter", function(self)
-      GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
-      GameTooltip:AddLine("Margin")
-      GameTooltip:AddLine("Profit, cheapest leveling route and shopping list for this profession.", 1, 1, 1, true)
-      GameTooltip:Show()
-    end)
-    button:SetScript("OnLeave", GameTooltip_Hide)
+    button = ns.W.Button(parent, { name = "MarginProfessionButton", text = "Margin", icon = "logo", width = 84, height = 22,
+      primary = true,
+      onClick = function()
+        local base = C_TradeSkillUI and C_TradeSkillUI.GetBaseProfessionInfo and C_TradeSkillUI.GetBaseProfessionInfo()
+        ns.OpenForProfession(base and base.professionName)
+      end,
+      tooltip = { "Margin", "Profit, cheapest leveling route and shopping list for this profession." } })
   end
   button:SetParent(parent)
   button:SetFrameLevel(parent:GetFrameLevel() + 20)
