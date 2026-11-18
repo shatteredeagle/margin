@@ -4,7 +4,7 @@ local _, ns = ...
 -- it costs and what you would net. The numbers come from ns.Quote (Calc.lua); this is only the window.
 
 local W, T = ns.W, ns.T
-local ROWS, ROW_H, WIDTH = 9, 22, 400
+local ROWS, ROW_H, WIDTH = 8, 22, 400
 local frame, recipe, qty, offset = nil, nil, 1, 0
 local quote
 
@@ -16,7 +16,7 @@ local function signed(p)
   return T.Signed(p)
 end
 
-local itemName = ns.ItemName
+local function itemName(id) return ns.ItemLabel(id) end
 
 local function setQty(n)
   qty = math.max(1, math.min(9999, math.floor(tonumber(n) or 1)))
@@ -27,7 +27,8 @@ local function setQty(n)
 end
 
 local function build()
-  frame = W.Window({ name = "MarginQuote", title = "Craft plan", width = WIDTH, height = 470, point = { "CENTER", 120, 0 } })
+  frame = W.Window({ name = "MarginQuote", title = "Craft plan", width = WIDTH, height = 500, point = { "CENTER", 120, 0 } })
+  -- W.Window is a top-level frame (clicking it raises it above the other Margin windows) and clamped to the screen
   frame:EnableMouseWheel(true)
   frame:SetScript("OnMouseWheel", function(_, d)
     local max = quote and math.max(0, #quote.list - ROWS) or 0
@@ -63,15 +64,22 @@ local function build()
   frame.edit:SetJustifyH("CENTER")
   frame.edit:SetPoint("TOPLEFT", 92, -78)
   frame.plus = small("+", 142, 24, function() setQty(qty + (IsShiftKeyDown() and 10 or 1)) end)
-  local x = 174
+  local x = 172
   frame.presets = {}
   for _, n in ipairs({ 5, 10, 25 }) do
-    frame.presets[#frame.presets + 1] = small(tostring(n), x, 34, function() setQty(n) end)
-    x = x + 38
+    frame.presets[#frame.presets + 1] = small(tostring(n), x, 30, function() setQty(n) end)
+    x = x + 32
   end
-  frame.max = small("Max", x, 48, function() if quote and quote.maxHeld > 0 then setQty(quote.maxHeld) end end)
+  frame.max = small("Max", x, 40, function() if quote and quote.maxHeld > 0 then setQty(quote.maxHeld) end end)
   W.TipText(frame.max, "Most you can craft from what you already hold",
     "Counts the base materials in your bags and bank. +/- change by 1, or 10 with Shift.", nil, "ANCHOR_TOP")
+  frame.best = small("Best", x + 42, 44, function()
+    local f = quote and quote.flip and quote.flip[ns.Opt("sortKey") == "ah" and "ah" or "vendor"]
+    if f and f.crafts > 0 then setQty(f.crafts) end
+  end)
+  W.TipText(frame.best, "Most crafts that still pay",
+    "Buying more ingredients means buying dearer listings. Best is the number of crafts after which the next one would lose money (or the AH runs out), for the sale route chosen on the Profit tab (Sell: vendor / AH).",
+    nil, "ANCHOR_TOP")
 
   -- the money, at a glance
   frame.sum = W.Text(frame, "row", "text")
@@ -80,7 +88,7 @@ local function build()
   frame.sum:SetWordWrap(true)
   frame.sum:SetSpacing(3)
   frame.warn = W.Text(frame, "small", "warn")
-  frame.warn:SetPoint("TOPLEFT", 14, -192)
+  frame.warn:SetPoint("TOPLEFT", 14, -228)
   frame.warn:SetWidth(WIDTH - 28)
   frame.warn:SetWordWrap(true)
 
@@ -88,7 +96,7 @@ local function build()
   for i = 1, ROWS do
     local row = CreateFrame("Frame", nil, frame)
     row:SetSize(WIDTH - 28, ROW_H)
-    row:SetPoint("TOPLEFT", 14, -214 - (i - 1) * ROW_H)
+    row:SetPoint("TOPLEFT", 14, -254 - (i - 1) * ROW_H)
     row.sep = W.Solid(row, "white", "BORDER", 0.035)
     row.sep:SetPoint("BOTTOMLEFT"); row.sep:SetPoint("BOTTOMRIGHT"); row.sep:SetHeight(1)
     row.icon = row:CreateTexture(nil, "ARTWORK")
@@ -124,6 +132,10 @@ function ns.RefreshQuote()
   frame.sub:SetText(("makes %d x %s"):format(quote.units, r.out and itemName(r.out) or "nothing you can sell"))
   if not frame.edit:HasFocus() then frame.edit:SetText(tostring(qty)) end
   frame.max:SetEnabled(quote.maxHeld > 0)
+  do
+    local f = quote.flip and quote.flip[ns.Opt("sortKey") == "ah" and "ah" or "vendor"]
+    frame.best:SetEnabled(f ~= nil and f.crafts > 0)
+  end
 
   local L = {}
   L[#L + 1] = ("You pay now        %s"):format(money(quote.cash))
@@ -133,6 +145,22 @@ function ns.RefreshQuote()
       quote.revenue.vendor and money(quote.revenue.vendor) or T.C("dim", "?"),
       quote.revenue.ah and money(quote.revenue.ah) or T.C("dim", "?"))
     L[#L + 1] = ("%s        vendor %s   AH %s"):format(T.C("accent", "Net profit"), signed(quote.profit.vendor), signed(quote.profit.ah))
+    -- how far the profit goes: each batch of ingredients is bought from dearer listings than the last
+    local fl = quote.flip
+    if fl and (fl.vendor or fl.ah) then
+      local function part(f, label)
+        if not f then return nil end
+        if f.crafts == 0 then return ("%s %s"):format(label, T.C("loss", "none pay")) end
+        local more = f.bySupply and (" " .. T.C("dim", "(all the AH has)")) or ""
+        if #fl.unknown > 0 and f.crafts >= 2000 then return ("%s %s"):format(label, T.C("dim", "no limit known")) end
+        return ("%s %s (%s)%s"):format(label, T.C("gold", f.crafts), signed(f.profit), more)
+      end
+      L[#L + 1] = ("Worth doing       up to %s   %s"):format(part(fl.vendor, "vendor") or "", part(fl.ah, "AH") or "")
+      local sel = fl[ns.Opt("sortKey") == "ah" and "ah" or "vendor"]
+      if sel and sel.next then
+        L[#L + 1] = T.C("dim", "The next craft after that would lose ") .. money(-sel.next)
+      end
+    end
   else
     L[#L + 1] = T.C("dim", "This recipe makes nothing you can sell.")
   end
@@ -140,6 +168,9 @@ function ns.RefreshQuote()
 
   local warns = {}
   if r.train or r.teach or r.extra then warns[#warns + 1] = "You have not learned this recipe yet." end
+  if quote.flip and #quote.flip.unknown > 0 then
+    warns[#warns + 1] = ("Listings unknown for %d ingredient%s: the limit may be off (run a Full scan)."):format(#quote.flip.unknown, #quote.flip.unknown > 1 and "s" or "")
+  end
   if quote.unpriced > 0 then warns[#warns + 1] = ("%d reagent%s with no price: profit not shown."):format(quote.unpriced, quote.unpriced > 1 and "s" or "") end
   if #quote.short > 0 then
     local names = {}
@@ -189,7 +220,17 @@ function ns.OpenQuote(r)
   recipe = r
   qty = math.max(1, (MarginDB.quoteQty and MarginDB.quoteQty[r.id]) or 5)
   offset = 0
+  -- beside the main window when it is open (never on top of it), else the middle of the screen
+  local main = ns.MainWindow and ns.MainWindow()
+  frame:ClearAllPoints()
+  if main then
+    frame:SetPoint("TOPLEFT", main, "TOPRIGHT", 6, 0)
+    frame:SetFrameLevel(main:GetFrameLevel() + 10)
+  else
+    frame:SetPoint("CENTER", 120, 0)
+  end
   frame:Show()
+  frame:Raise()
   ns.RefreshQuote()
 end
 

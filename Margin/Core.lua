@@ -1,5 +1,8 @@
 local _, ns = ...
 
+-- The main window's layout when none is chosen: "ledger" or "classic" (the one place to change it).
+ns.DEFAULT_THEME = "ledger"
+
 ns.defaults = {
   ahCut = 0.05,       -- fraction the AH keeps when a sale completes
   ahChance = 0.8,     -- how often a listing sells; the deposit is lost when it does not
@@ -15,7 +18,7 @@ ns.defaults = {
   merchantList = true, -- open the vendor buy list beside a vendor that sells route items
   ahList = true,      -- open the shopping list beside the auction house
   useTrainer = true,  -- route may include recipes you still have to learn from a trainer
-  theme = "ledger",   -- main window layout and palette: "ledger" or "classic" (ns.Layouts)
+  theme = ns.DEFAULT_THEME, -- main window layout and palette: "ledger" or "classic" (ns.Layouts)
   -- autoFullScan: nil (default: on when Auctionator is absent) | true | false
 }
 
@@ -57,6 +60,12 @@ f:RegisterEvent("ADDON_LOADED")
 f:SetScript("OnEvent", function(_, _, name)
   if name ~= "Margin" then return end
   MarginDB = MarginDB or {}
+  -- Lookups made before the 2-hour retry rule were remembered for 12 hours whether or not they found anything,
+  -- which hid unpriced items from the AH button: age those entries once so they are asked for again.
+  if not MarginDB.searchedFix then
+    for id, t in pairs(MarginDB.searched or {}) do MarginDB.searched[id] = t - 10 * 3600 end
+    MarginDB.searchedFix = true
+  end
   f:UnregisterEvent("ADDON_LOADED")
 end)
 

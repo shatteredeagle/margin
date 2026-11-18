@@ -243,7 +243,7 @@ local function fillRow(row, e)
   local d = e
   row.icon:SetTexture(C_Item.GetItemIconByID(d.item))
   local mail = d.transit > 0 and ("  " .. T.C("unlearned", ("(+%d on the way)"):format(d.transit))) or ""
-  row.name:SetText(ns.ItemName(d.item) .. mail)
+  row.name:SetText(ns.ItemLabel(d.item) .. mail)
   W.TextColor(row.name, d.kind == "done" and "profit" or (d.kind == "vendor" and "dim" or "text"))
   row.have:SetValue(d.have, d.need)
   if d.kind == "done" then

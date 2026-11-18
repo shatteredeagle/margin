@@ -98,10 +98,34 @@ end
 
 local startRound
 
+-- The items the round in flight was asked to find, so the end of the round can say which ones turned up nothing.
+local sentIds = {}
+
+-- After a round: name the items still without a price (nobody lists them, or the search missed them) and let
+-- them be asked for again in about two hours, not twelve.
+local function reportUnresolved(ids)
+  local none = {}
+  for _, id in ipairs(ids) do
+    if not ns.AHPrice(id) then
+      none[#none + 1] = C_Item.GetItemNameByID(id) or ("item " .. id)
+      MarginDB.searched = MarginDB.searched or {}
+      MarginDB.searched[id] = time() - 10 * 3600
+    end
+  end
+  if #none > 0 then
+    ns.Print(("No listing found for %d item%s: %s%s. Margin asks again in about 2 hours (or run a Full scan)."):format(
+      #none, #none > 1 and "s" or "", table.concat(none, ", ", 1, math.min(#none, 8)), #none > 8 and ", ..." or ""))
+  end
+end
+
 function ns.AHRoundDone(token)
   if token ~= runToken or not running then return end
-  C_Timer.After(PAUSE, function()
-    if token == runToken and running then startRound() end
+  local ids = sentIds
+  sentIds = {}
+  C_Timer.After(PAUSE + 2, function() -- a moment for Auctionator to record what the search found
+    if token ~= runToken or not running then return end
+    reportUnresolved(ids)
+    startRound()
   end)
 end
 
@@ -137,6 +161,7 @@ startRound = function()
   if not (A and A.MultiSearchExact) then
     ns.Print(("Looking up %d items%s."):format(#ids, more > 0 and (", " .. more .. " more after") or ""))
     markSearched(ids)
+    sentIds = ids
     ns.ScanItems(ids, function() ns.AHRoundDone(token) end) -- Margin's own search; reports when it is done
     return
   end
@@ -163,6 +188,7 @@ startRound = function()
   local ok, err = pcall(A.MultiSearchExact, "Margin", names)
   if not ok then return stop("Search failed: " .. tostring(err)) end
   markSearched(sent)
+  sentIds = sent
   ns.Print(("Searching %d items%s."):format(#names, more > 0 and (", " .. more .. " more after this round") or ""))
   if hookAuctionator() then
     awaiting = token

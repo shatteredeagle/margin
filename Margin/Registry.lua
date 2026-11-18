@@ -111,14 +111,15 @@ end
 ---------------------------------------------------------------------------
 -- Layouts
 --   ns.Layouts.register(name, { title, palette, order,
---     build(), refresh(), show(), hide(), isShown(), scrollTop() })
+--     build(), refresh(), redraw(), show(), hide(), isShown(), scrollTop(), frame() })
 -- refresh() redraws when shown (and drops cached data); the registry calls it from ns.RefreshUI.
+-- redraw() only rebuilds text from what is cached (ns.RedrawUI, when item names arrive).
 ---------------------------------------------------------------------------
 
 local layouts, order = {}, {}
 local Layouts = {}
 ns.Layouts = Layouts
-local DEFAULT = "ledger"
+local DEFAULT = ns.DEFAULT_THEME or "ledger"
 
 function Layouts.register(name, def)
   def.name = name
@@ -179,6 +180,23 @@ function ns.RefreshUI()
   if ns.RefreshQuote then ns.RefreshQuote() end
   local L = Layouts.active()
   if L then L.refresh() end
+end
+
+-- Item names arrived: rebuild the text only. Never re-plans (ns.RefreshUI does), or every name that
+-- loads would plan every route again.
+function ns.RedrawUI()
+  local L = Layouts.active()
+  if L then (L.redraw or L.refresh)() end
+  if ns.RefreshShopping then ns.RefreshShopping() end
+  if ns.RefreshMerchant then ns.RefreshMerchant() end
+  if ns.RefreshQuote then ns.RefreshQuote() end
+end
+
+-- The open main window of the chosen layout (companions dock beside it), or nil.
+function ns.MainWindow()
+  local L = Layouts.active()
+  local f = L and L.frame and L.frame()
+  return f and f:IsShown() and f or nil
 end
 
 function ns.ToggleUI()

@@ -702,6 +702,8 @@ ns.Layouts.register("ledger", {
   title = "Ledger", palette = "ledger", order = 10,
   build = function() if not win then build() end end,
   refresh = function() cache = nil; redraw() end,
+  -- names arrived: rebuild the rows. The plans themselves stay cached (ns.CurrentPlan), so this never re-plans.
+  redraw = function() cache = nil; redraw() end,
   show = function() if not win then build() end; win:Show() end,
   hide = function() if win then win:Hide() end end,
   isShown = function() return win ~= nil and win:IsShown() end,
@@ -710,12 +712,12 @@ ns.Layouts.register("ledger", {
   frame = function() return win end,
 })
 
--- Item names arrive asynchronously; redraw once they have.
+-- Item names arrive asynchronously; redraw once they have (text only: ns.RedrawUI never re-plans).
 local loader = CreateFrame("Frame")
 loader:RegisterEvent("GET_ITEM_INFO_RECEIVED")
 local queued
 loader:SetScript("OnEvent", function()
   if queued or not (win and win:IsShown()) then return end
   queued = true
-  C_Timer.After(0.3, function() queued = nil; ns.RefreshUI() end)
+  C_Timer.After(0.5, function() queued = nil; ns.RedrawUI() end)
 end)

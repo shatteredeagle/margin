@@ -18,7 +18,7 @@ local HEADERS = {
 }
 
 local money, signed, plainMoney = T.Money, T.Signed, T.Plain
-local itemName = ns.ItemName
+local function itemName(id) return ns.ItemLabel(id) end
 
 local function setOffset(v, scrolling)
   local max = math.max(0, total - shown)
@@ -731,6 +731,9 @@ ns.Layouts.register("classic", {
   title = "Classic", palette = "classic", order = 90,
   build = function() if not frame then build() end end,
   refresh = function() cache = nil; if redraw then redraw() end end,
+  -- names arrived: rebuild the text only (the route cache holds strings with names in it)
+  redraw = function() cache = nil; if redraw then redraw() end end,
+  frame = function() return frame end,
   show = function() if not frame then build() end; frame:Show() end,
   hide = function() if frame then frame:Hide() end end,
   isShown = function() return frame ~= nil and frame:IsShown() end,
@@ -744,5 +747,5 @@ local queued
 loader:SetScript("OnEvent", function()
   if queued or not (frame and frame:IsShown()) then return end
   queued = true
-  C_Timer.After(0.3, function() queued = nil; ns.RefreshUI() end)
+  C_Timer.After(0.5, function() queued = nil; ns.RedrawUI() end)
 end)

@@ -381,7 +381,7 @@ end
 
 local function fillRow(row, r)
   row.icon:SetTexture(C_Item.GetItemIconByID(r.item))
-  row.name:SetText(ns.ItemName(r.item))
+  row.name:SetText(ns.ItemLabel(r.item))
   row.pill:Hide()
   row.action:SetArmed(false)
   if r.sell then

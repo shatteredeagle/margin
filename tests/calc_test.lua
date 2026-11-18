@@ -414,6 +414,7 @@ do
   MarginDB = nil
 end
 -- view model and money formatting (Theme.lua, ViewModel.lua): pure, no frames
+local saved = { Supply = ns.Supply, WalkCost = ns.WalkCost, ItemName = ns.ItemName, Owned = ns.Owned }
 assert(loadfile("Margin/Theme.lua"))("Margin", ns)
 assert(loadfile("Margin/ViewModel.lua"))("Margin", ns)
 local function strip(s) return (s:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")) end
@@ -487,7 +488,59 @@ assert(ns.VM.Status("route", nil, 30) == "route to 30")
 assert(ns.VM.Status("profit", { recipes = 19, priced = 18, shown = 19 }) == "19 recipes · 18 priced · 19 shown")
 assert(ns.VM.Warnings("route", {}, { plan = rp }):find("2 skill points have no priced recipe", 1, true))
 assert(ns.VM.Warnings("profit", {}, { counts = { unpriced = 0 } }) == nil)
-ns.Owned = function() return 0 end
-ns.Supply, ns.WalkCost, ns.ItemName = nil, nil, nil
+ns.Supply, ns.WalkCost, ns.ItemName, ns.Owned = saved.Supply, saved.WalkCost, saved.ItemName, saved.Owned
 resaleMode = "off"
+
+-- flip limit: how many crafts stay profitable as the ingredient listings get dearer
+do
+  MarginDB = { depth = {} }
+  ns.Owned = function() return 0 end
+  prices[300] = { 100, "ah" }; prices[301] = { 50, "vendor" }
+  ns.NoteDepth(300, { 100, 10, 300, 10 }, false)               -- 10 units @1s, then 10 @3s
+  ns.VendorSell = function(id) return id == 310 and 250 or nil end
+  ns.AHNetPerUnit = function(id) return id == 310 and 1000 or nil end
+  local fr = { id = 700, out = 310, qty = 1, diff = 0, ups = 1, trivial = 400,
+    reagents = { {item = 300, count = 1}, {item = 301, count = 1} } }
+  local fl = ns.FlipLimit(fr, { F = { recipes = { fr } } })
+  -- vendor sale 250: crafts 1-10 cost 100+50 (profit 100 each); craft 11 costs 300+50 (loses 100)
+  assert(fl.vendor.crafts == 10 and fl.vendor.profit == 1000 and fl.vendor.next == -100, fl.vendor.crafts)
+  -- AH sale 1000: every craft pays, so the AH's 20 units are the limit
+  assert(fl.ah.crafts == 20 and fl.ah.bySupply and fl.supplyCap == 20, fl.ah.crafts)
+  -- unknown listings: priced at the lowest price and named
+  prices[302] = { 40, "ah" }
+  local fu = { id = 701, out = 310, qty = 1, diff = 0, ups = 1, trivial = 400, reagents = { {item = 302, count = 1} } }
+  local flu = ns.FlipLimit(fu, { F = { recipes = { fu } } })
+  assert(#flu.unknown == 1 and flu.unknown[1] == 302 and flu.vendor.crafts == 2000, "no supply data: no cap, flagged")
+  local q = ns.Quote(fr, 3, { F = { recipes = { fr } } })
+  assert(q.flip and q.flip.vendor.crafts == 10, "the quote carries it")
+  MarginDB = nil
+end
+
+-- price walking: a recipe that gets dearer as its ingredient is used up loses to a steadier one
+do
+  MarginDB = { depth = {} }
+  ns.Owned = function() return 0 end
+  prices[400] = { 100, "ah" }; prices[401] = { 200, "vendor" }
+  ns.NoteDepth(400, { 100, 10, 300, 100 }, false)               -- 10 units @1s, then 100 @3s
+  local Walky = { id = 800, out = 801, qty = 1, diff = 0, ups = 1, trivial = 400, reagents = { {item = 400, count = 1} } }   -- 100c at first
+  local Steady = { id = 802, out = 803, qty = 1, diff = 0, ups = 1, trivial = 400, reagents = { {item = 401, count = 1} } } -- 200c always
+  local pw = { skill = 10, max = 60, recipes = { Walky, Steady } }
+  resaleMode = "off"
+  local walked = ns.Plan(pw, 40, { pw }, false)                 -- 30 skill points
+  assert(#walked.segs == 2 and walked.segs[1].row.r == Walky and walked.segs[1].to == 20 and walked.segs[2].row.r == Steady,
+    "the first 10 units are cheapest; after that 300c loses to 200c: " .. tostring(walked.segs[1].to))
+  assert(walked.cost == 10 * 100 + 20 * 200, walked.cost)       -- no premium paid on the cheap listings
+  -- with only Walky available the premium is paid and counted
+  local pw2 = { skill = 10, max = 60, recipes = { Walky } }
+  local only = ns.Plan(pw2, 20, { pw2 }, false)                 -- 10 points: all 10 on the cheap listings
+  assert(only.cost == 1000, only.cost)
+  local only30 = ns.Plan(pw2, 40, { pw2 }, false)               -- 30 points: 10 @100, 20 @300
+  assert(only30.cost == 10 * 100 + 20 * 300 and only30.gross == only30.cost, only30.cost)
+  -- what you hold is used before any is bought: holding 10 means 10 more of the cheap ones are free
+  ns.Owned = function(id) return id == 400 and 10 or 0 end
+  local held = ns.Plan(pw2, 40, { pw2 }, false)                 -- 30 points: 10 held, then 10 @100, then 10 @300
+  assert(held.cost == 30 * 100 + 10 * 200, held.cost)           -- the premium is only paid on the last 10
+  ns.Owned = function() return 0 end
+  MarginDB = nil
+end
 print("calc ok")

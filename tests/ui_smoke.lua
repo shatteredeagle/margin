@@ -33,7 +33,7 @@ RegisterForClicks SetHighlightTexture LockHighlight UnlockHighlight SetOrientati
 SetValueStep SetThumbTexture SetAutoFocus SetMaxLetters SetNumeric SetTextInsets SetDrawLayer SetBlendMode
 SetOwner AddLine AddDoubleLine ClearLines CopyFontObject SetShadowOffset SetShadowColor SetItemByID
 StartMoving StopMovingOrSizing HighlightText SetNormalTexture SetPushedTexture UnregisterAllEvents SetScale
-SetHitRectInsets SetFontString SetNormalFontObject SetHighlightFontObject SetDisabledFontObject
+SetHitRectInsets SetFontString SetNormalFontObject SetHighlightFontObject SetDisabledFontObject Raise Lower
 ]]):gmatch("%S+") do NOOP[name] = function() end end
 
 local events = {}      -- event -> list of frames
@@ -264,7 +264,8 @@ function C_Item.GetItemInfoInstant(id) return NAMES[id] and id or nil end
 GetItemCount = C_Item.GetItemCount
 
 C_TradeSkillUI = {}
-function C_TradeSkillUI.OpenRecipe() end
+openRecipeCalls = 0
+function C_TradeSkillUI.OpenRecipe() openRecipeCalls = openRecipeCalls + 1 end
 function C_TradeSkillUI.OpenTradeSkill() end
 function C_TradeSkillUI.IsTradeSkillReady() return false end
 function C_TradeSkillUI.IsDataSourceChanging() return false end
@@ -614,7 +615,51 @@ for _, key in ipairs({ "minus", "plus", "max", "open" }) do
   if MarginQuote[key] then click(MarginQuote[key]) end
 end
 for _, b in ipairs(MarginQuote.presets or {}) do click(b) end
+-- type a quantity, then Best, then open it: the open button must call the protected API inside the click
+MarginQuote.edit:SetFocus(); MarginQuote.edit:SetText("7"); MarginQuote.edit:GetScript("OnEnterPressed")(MarginQuote.edit)
+assert(MarginDB.quoteQty and next(MarginDB.quoteQty) and select(2, next(MarginDB.quoteQty)) == 7, "typed quantity kept")
+hover(MarginQuote.best)
+click(MarginQuote.best)
+local before = openRecipeCalls
+MarginQuote.open:GetScript("OnClick")(MarginQuote.open, "LeftButton")
+assert(openRecipeCalls == before + 1, "Quote's open button selects the recipe inside the click, not from a timer")
+flush()
 MarginQuote:Hide()
+
+-- a Leveling row click reaches C_TradeSkillUI.OpenRecipe in the same call
+click(win.tabs.tabs[2])
+for _, r in ipairs(shownRows(win.list)) do
+  local e = r.entry
+  if e.craft and not e.craft.learnFirst then
+    before = openRecipeCalls
+    r:GetScript("OnClick")(r, "LeftButton")
+    assert(openRecipeCalls == before + 1, "a row click selects the recipe synchronously")
+    break
+  end
+end
+flush()
+
+-- item names arriving only redraw: no re-planning, no dropped plans
+click(win.tabs.tabs[3])
+local S2 = ns.S
+S2.showHistory, S2.showStock = true, true
+ns.SetProfession("Leatherworking")
+ns.RefreshUI()
+local k2 = kinds(win.list)
+assert(k2.history and k2.stock and k2.shop, "Route tab with history and stock expanded")
+-- one redraw first: the first plan after a re-plan creates the lock, and the locked route is planned once
+-- more under its lock (that is the planner's own cache, not the names path)
+ns.RedrawUI()
+local plans, invalidations = 0, 0
+local realPlan, realInvalidate = ns.Plan, ns.InvalidatePlan
+ns.Plan = function(...) plans = plans + 1; return realPlan(...) end
+ns.InvalidatePlan = function(...) invalidations = invalidations + 1; return realInvalidate(...) end
+local oldEntries = win.list.entries
+for _ = 1, 5 do fire("GET_ITEM_INFO_RECEIVED", 4234, true) end
+flush()
+assert(win.list.entries ~= oldEntries, "the names redraw happened")
+assert(plans == 0 and invalidations == 0, ("GET_ITEM_INFO_RECEIVED re-planned (%d plans, %d invalidations)"):format(plans, invalidations))
+ns.Plan, ns.InvalidatePlan = realPlan, realInvalidate
 
 ---------------------------------------------------------------------------
 -- Auction house: the strip, the lookup, the shopping list

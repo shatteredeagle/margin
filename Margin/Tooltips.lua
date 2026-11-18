@@ -14,7 +14,7 @@ local NOTE = { 0.7, 0.7, 0.7 }
 function Tips.Recipe(tt, d)
   tt:AddLine(d.r.name)
   for _, l in ipairs(d.lines) do
-    tt:AddDoubleLine(l.count .. "x " .. ns.ItemName(l.item),
+    tt:AddDoubleLine(l.count .. "x " .. ns.ItemLabel(l.item),
       l.unit and (money(l.unit * l.count) .. " (" .. l.src .. ")") or "no price", 1, 1, 1, 1, 1, 1)
   end
   tt:AddDoubleLine("Cost", money(d.cost))
@@ -87,7 +87,7 @@ function Tips.Entry(tt, e)
     if e.how == "trainer" then
       tt:AddLine("Forever trainer data (EG Link); not every trainer is listed.", NOTE[1], NOTE[2], NOTE[3], true)
     elseif e.item then
-      tt:AddLine(("Recipe item: %s"):format(ns.ItemName(e.item)), NOTE[1], NOTE[2], NOTE[3], true)
+      tt:AddLine(("Recipe item: %s"):format(ns.ItemLabel(e.item)), NOTE[1], NOTE[2], NOTE[3], true)
     end
   elseif k == "shop" then
     tt:AddLine(e.name)
