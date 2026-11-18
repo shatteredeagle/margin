@@ -65,4 +65,5 @@ tinsert
 tonumber
 tostring
 type
+unpack
 wipe

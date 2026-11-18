@@ -15,6 +15,8 @@ ns.defaults = {
   merchantList = true, -- open the vendor buy list beside a vendor that sells route items
   ahList = true,      -- open the shopping list beside the auction house
   useTrainer = true,  -- route may include recipes you still have to learn from a trainer
+  theme = "ledger",   -- main window layout and palette: "ledger" or "classic" (ns.Layouts)
+  -- autoFullScan: nil (default: on when Auctionator is absent) | true | false
 }
 
 local function chardb()
@@ -118,7 +120,12 @@ SlashCmdList.MARGIN = function(msg)
   elseif msg == "probe" then
     ns.Probe()
   elseif msg == "report" then
-    ns.Report()
+    if ns.Report then ns.Report() else ns.Print("/margin report is not available; /margin dump writes the route to SavedVariables.") end
+  elseif msg:match("^theme") then
+    local m = msg:match("theme%s+(%a+)")
+    local names = ns.Layouts and ns.Layouts.list() or {}
+    if m and not (ns.SetTheme and ns.SetTheme(m)) then ns.Print("no such theme:", m) end
+    ns.Print("theme:", ns.Layouts and ns.Layouts.activeName() or "?", "(/margin theme " .. table.concat(names, " | ") .. ")")
   elseif msg:match("^chance") then
     local pct = tonumber(msg:match("chance%s+(%d+)"))
     if pct then ns.SetOpt("ahChance", math.min(100, pct) / 100); ns.Print("AH sale chance", pct .. "%"); if ns.RefreshUI then ns.RefreshUI() end end

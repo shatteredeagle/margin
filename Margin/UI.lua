@@ -603,14 +603,6 @@ local function routeData()
   return { cards = cards, sel = sel, list = routeEntries(sel.plan), target = sel.plan.target }
 end
 
-function ns.RefreshUI()
-  ns.InvalidatePlan()
-  if ns.RefreshShopping then ns.RefreshShopping() end
-  if ns.RefreshMerchant then ns.RefreshMerchant() end
-  cache = nil
-  if redraw then redraw() end
-end
-
 redraw = function()
   if not frame or not frame:IsShown() then return end
   layout(S.tab == "route")
@@ -734,24 +726,16 @@ redraw = function()
   end
 end
 
--- Show the window on a given profession (the profession window's button uses this).
-function ns.OpenForProfession(name)
-  if not frame then build() end
-  if name and ns.Char().profs[name] then S.prof = name end
-  if frame:IsShown() then
-    ns.RefreshUI()
-  else
-    frame:Show()
-    ns.RefreshUI()
-  end
-end
-
-function ns.UIScrollTop() offset = 0 end
-
-function ns.ToggleUI()
-  if not frame then build() end
-  if frame:IsShown() then frame:Hide() else frame:Show(); ns.RefreshUI() end
-end
+-- The classic window, kept as a fallback layout until the Ledger has proved itself in game.
+ns.Layouts.register("classic", {
+  title = "Classic", palette = "classic", order = 90,
+  build = function() if not frame then build() end end,
+  refresh = function() cache = nil; if redraw then redraw() end end,
+  show = function() if not frame then build() end; frame:Show() end,
+  hide = function() if frame then frame:Hide() end end,
+  isShown = function() return frame ~= nil and frame:IsShown() end,
+  scrollTop = function() offset = 0 end,
+})
 
 -- Item names arrive asynchronously; redraw once they have.
 local loader = CreateFrame("Frame")

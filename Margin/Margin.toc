@@ -22,6 +22,8 @@ Scan.lua
 Calc.lua
 Progress.lua
 State.lua
+Registry.lua
+Widgets.lua
 UI.lua
 Quote.lua
 Dump.lua

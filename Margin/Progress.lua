@@ -161,10 +161,7 @@ end)
 --  * and changes are batched over two seconds.
 local bagsQueued, lastSig
 local function openWindow()
-  for _, name in ipairs({ "MarginFrame", "MarginShopping", "MarginMerchant" }) do
-    local f = _G[name]
-    if f and f:IsShown() then return true end
-  end
+  return ns.AnyWindowShown and ns.AnyWindowShown()
 end
 
 local function bagSignature()
