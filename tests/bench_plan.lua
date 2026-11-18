@@ -48,3 +48,13 @@ print(("rows %d, one plan: %.2f s, segments %d"):format(#learned + #unlearned, d
 local t1 = os.clock()
 for i = 1, 4 do ns.Plan(prof, 225, { Bench = prof }, i % 2 == 0) end
 print(("four plans (the Route tab's cards): %.2f s"):format(os.clock() - t1))
+
+-- A locked route replays the recipe picked for each skill point; replaying must reproduce the plan it came from.
+do
+  local free = ns.Plan(prof, 225, { Bench = prof }, true)
+  local forced = ns.Plan(prof, 225, { Bench = prof }, true, ns.ForceFromPicks(ns.PlanPicks(free)))
+  local function sig(p) local t = {} for _, s in ipairs(p.segs) do t[#t + 1] = (s.gap and "gap" or s.row.r.id) .. ":" .. s.from .. "-" .. s.to end return table.concat(t, " ") end
+  print("free  :", sig(free), free.cost, free.shopCost)
+  print("forced:", sig(forced), forced.cost, forced.shopCost)
+  print(sig(free) == sig(forced) and "lock replay matches" or "LOCK REPLAY DIFFERS")
+end

@@ -512,12 +512,16 @@ function ns.Plan(prof, target, profs, useTrainer, force)
     end
   end
   local skip = {}
+  local kept = {}
+  for _, id in pairs(force or {}) do kept[id] = true end
   local segs, total, crafts, gross, constrained
   while true do
     segs, total, crafts, gross, constrained = route(rows, base, start, target, skip, force, byId)
     local used = {}
     for _, seg in ipairs(segs) do
-      if not seg.gap and seg.row.learn then used[seg.row] = true end
+      -- a recipe a locked route already chose stays: weighing it against a route whose other points are all
+      -- forced is not the comparison that picked it, and used to throw out one recipe of the lock
+      if not seg.gap and seg.row.learn and not kept[seg.row.r.id] then used[seg.row] = true end
     end
     local worst, worstNet
     for row in pairs(used) do

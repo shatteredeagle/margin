@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Fixed: a locked route could differ from the plan it was locked from. Replaying a lock re-tested each learned recipe against a route whose other points were all forced, and could throw one recipe out (the route then mixed two plans, with one recipe appearing twice). A lock now keeps every recipe it chose; the check only applies to recipes the lock did not pick.
+
 - `/margin dump` keeps the last six dumps (with their times) instead of overwriting, in a stable order, so two dumps can be compared after a /reload.
 
 - **New window: the Ledger.** Same three tabs, clearer layout (docs/ui-redesign/DESIGN.md, direction A): a header band with a profession dropdown, a skill bar and a Settings gear; underline tabs with the search box (Profit, Leveling) or the lock state and Re-plan (Route) at the right; one row of chips naming the settings the tab uses ("Resale: vendor", "Odds: worst case", ...), click to change; a short status at the right; warnings in a banner that wraps instead of a line that got cut off. The Route tab has larger comparison cards (selected = gold frame, green + / red - for how much better or worse each option is) and one list with real section bands: Crafted stock and Completed steps (both collapsible), Steps with the net total, Recipes to learn, Shopping list; prep crafts hang off their step with a make / have tag, recipes to learn carry a learn tag. Leveling's middle column now shows the resale value the net is computed with.
