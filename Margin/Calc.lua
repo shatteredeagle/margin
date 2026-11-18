@@ -542,3 +542,37 @@ function ns.SearchedUnpriced()
   end
   return n
 end
+
+-- What the route makes that you are holding: the products of its steps, never anything a step or the
+-- shopping list uses as a reagent (that is materials, not stock). Each with what it would fetch from a
+-- vendor and on the AH (after the cut and the expected lost deposit), most valuable first.
+function ns.RouteStock(plan, includeBank)
+  local reagent = {}
+  for _, seg in ipairs(plan.segs) do
+    if not seg.gap then
+      for _, rg in ipairs(seg.row.r.reagents) do reagent[rg.item] = true end
+    end
+  end
+  for _, it in ipairs(plan.shop) do reagent[it.item] = true end
+  local count = (C_Item and C_Item.GetItemCount) or GetItemCount
+  local out, seen = {}, {}
+  for _, seg in ipairs(plan.segs) do
+    local r = not seg.gap and seg.row.r
+    if r and r.out and not reagent[r.out] then
+      local row = seen[r.out]
+      if not row then
+        local n = count and count(r.out, includeBank and true or false) or 0
+        if n > 0 then
+          row = { item = r.out, name = r.name, icon = r.icon, count = n, steps = {},
+            vendor = ns.VendorSell(r.out) or 0, ah = ns.AHNetPerUnit and ns.AHNetPerUnit(r.out) or nil }
+          seen[r.out] = row
+          out[#out + 1] = row
+        end
+      end
+      if row then row.steps[#row.steps + 1] = ("%d-%d"):format(seg.from, seg.to) end
+    end
+  end
+  local function worth(row) return row.count * math.max(row.vendor, row.ah or 0) end
+  table.sort(out, function(a, b) return worth(a) > worth(b) end)
+  return out
+end

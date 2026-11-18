@@ -360,4 +360,20 @@ for i = 1, 60 do ns.AddListing(many, { [700] = true }, 700, 1, i * 100) end
 local cut = ns.FinishListings(many, { [700] = true }, 40)
 assert(#cut[700].flat == 80 and cut[700].capped, "keeps the 40 cheapest and says there were more")
 MarginDB = nil
+
+-- crafted stock: the route's products you hold, never its reagents, most valuable first
+local held = { [140] = 7, [142] = 3, [20] = 5 }
+GetItemCount = function(id) return held[id] or 0 end
+ns.VendorSell = function(id) return ({ [140] = 100, [142] = 1000, [20] = 50 })[id] end
+ns.AHNetPerUnit = function(id) return ({ [140] = 300, [142] = nil })[id] end
+local boot = { id = 150, name = "Boot", out = 140, qty = 1, diff = 0, ups = 1, trivial = 400, reagents = { {item = 1, count = 1} } }
+local belt = { id = 151, name = "Belt", out = 142, qty = 1, diff = 0, ups = 1, trivial = 400, reagents = { {item = 140, count = 1} } }  -- uses Boot as a reagent
+local ps2 = { skill = 10, max = 60, recipes = { boot, belt } }
+local fake = { segs = { { from = 10, to = 12, row = { r = boot } }, { from = 12, to = 14, row = { r = belt } } }, shop = {} }
+local stock = ns.RouteStock(fake, true)
+assert(#stock == 1 and stock[1].item == 142 and stock[1].count == 3, "Boot is a reagent of a later step: not stock")
+fake.segs[2] = nil
+stock = ns.RouteStock(fake, true)
+assert(#stock == 1 and stock[1].item == 140 and stock[1].count == 7 and stock[1].vendor == 100 and stock[1].ah == 300)
+GetItemCount = nil
 print("calc ok")

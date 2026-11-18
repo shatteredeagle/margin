@@ -605,8 +605,51 @@ local function historyEntries(list)
   end
 end
 
+local showStock = false
+
+-- "Crafted stock": what the route has made and you are holding, worth what at a vendor and on the AH.
+local function stockEntries(list, plan)
+  local rows = ns.RouteStock(plan, true)
+  if #rows == 0 then return end
+  local items, v, a, best = 0, 0, 0, 0
+  for _, r in ipairs(rows) do
+    local vv, aa = r.count * r.vendor, r.ah and r.count * r.ah or 0
+    items, v, a, best = items + r.count, v + vv, a + aa, best + math.max(vv, aa)
+  end
+  list[#list + 1] = {
+    icon = rows[1].icon,
+    name = ("|cff80e0ff%s Crafted stock|r  |cff909090(%d items)|r"):format(showStock and "v" or ">", items),
+    cost = "|cff909090vendor|r " .. money(v), sale = "|cff909090AH|r " .. money(a), val = money(best),
+    action = function() showStock = not showStock; ns.RefreshUI() end,
+    tip = function(tt)
+      tt:AddLine("Crafted stock")
+      tt:AddLine("What this route has made and you are holding (bags and bank), and what it would fetch. The right-hand figure takes the better of vendor and AH for each item.", 1, 1, 1, true)
+      tt:AddLine("AH values are after the AH cut and the deposit you would lose on listings that do not sell. Click to show or hide the items.", 0.7, 0.7, 0.7, true)
+    end,
+  }
+  if not showStock then return end
+  for _, r in ipairs(rows) do
+    local vv, aa = r.count * r.vendor, r.ah and r.count * r.ah or nil
+    list[#list + 1] = {
+      icon = r.icon,
+      name = ("      %s |cff909090x%d|r"):format(r.name, r.count),
+      cost = "|cff909090vendor|r " .. money(vv),
+      sale = aa and ("|cff909090AH|r " .. money(aa)) or "|cff909090AH ?|r",
+      val = money(math.max(vv, aa or 0)),
+      tip = function(tt)
+        tt:AddLine(r.name)
+        tt:AddDoubleLine("Holding", r.count)
+        tt:AddDoubleLine("Vendor, each", money(r.vendor))
+        tt:AddDoubleLine("AH, each (net)", r.ah and money(r.ah) or "no price")
+        tt:AddDoubleLine("Made in step", table.concat(r.steps, ", "))
+      end,
+    }
+  end
+end
+
 local function routeEntries(plan)
   local list = {}
+  stockEntries(list, plan)
   historyEntries(list)
   for _, seg in ipairs(plan.segs) do
     if seg.gap then

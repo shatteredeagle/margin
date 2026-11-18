@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Route tab: a "Crafted stock" row at the top shows what the route has made and you are holding, worth what at a vendor and on the AH (after the cut and the lost-deposit risk); click it for the items. It never includes anything a later step uses as a reagent.
+
 - The route no longer redraws on every craft: bag changes are batched over two seconds, ignored while no Margin window is open, and only redraw when the count of an item the route actually uses has changed.
 
 ## 0.1.6-alpha

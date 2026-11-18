@@ -174,6 +174,7 @@ local function bagSignature()
   for _, it in ipairs(plan.shop) do parts[#parts + 1] = it.item .. ":" .. ns.Owned(it.item) end
   for _, seg in ipairs(plan.segs) do
     for _, p in ipairs(seg.prep or {}) do parts[#parts + 1] = p.item .. ":" .. ns.Owned(p.item) end
+    if not seg.gap and seg.row.r.out then parts[#parts + 1] = seg.row.r.out .. ":" .. ns.Owned(seg.row.r.out) end -- the stock display
   end
   return table.concat(parts, ",")
 end
