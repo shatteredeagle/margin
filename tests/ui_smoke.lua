@@ -749,6 +749,20 @@ flush()
 assert(win.list.entries ~= oldEntries, "the names redraw happened")
 assert(plans == 0 and invalidations == 0, ("GET_ITEM_INFO_RECEIVED re-planned (%d plans, %d invalidations)"):format(plans, invalidations))
 ns.Plan, ns.InvalidatePlan = realPlan, realInvalidate
+-- while you keep crafting nothing refreshes; once you stop it refreshes once
+do
+  local realRefresh, calls = ns.RefreshUI, 0
+  ns.RefreshUI = function(...) calls = calls + 1; return realRefresh(...) end
+  for i = 1, 8 do
+    bags[4234] = (bags[4234] or 0) + 1
+    fire("BAG_UPDATE_DELAYED")
+    flush(1) -- a craft every second or so
+  end
+  assert(calls == 0, "no refresh while crafting (" .. calls .. ")")
+  flush(10)
+  assert(calls == 1, "one refresh once crafting stopped (" .. calls .. ")")
+  ns.RefreshUI = realRefresh
+end
 -- a bag change replans the route you follow, never the comparison cards (planning them all again every couple of
 -- seconds while crafting was the FPS sawtooth)
 do

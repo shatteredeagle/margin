@@ -79,7 +79,7 @@ function ns.RefreshSkills()
       end
     end
   end
-  if changed and ns.RefreshUI then ns.RefreshUI() end
+  if changed then ns.RefreshWhenIdle(true) end
 end
 
 local f = CreateFrame("Frame")
@@ -89,6 +89,7 @@ f:SetScript("OnEvent", function(_, event, unit, _, spellID)
   if event == "SKILL_LINES_CHANGED" then
     C_Timer.After(0.2, ns.RefreshSkills)
   elseif unit == "player" and type(spellID) == "number" and not (issecretvalue and issecretvalue(spellID)) then
+    ns.NoteActivity()
     if knownRecipe(spellID) then
       crafts[spellID] = (crafts[spellID] or 0) + 1
       last = { id = spellID, t = time() }
@@ -159,7 +160,12 @@ end)
 --  * nothing is redrawn while no Margin window is open (the plan is just marked stale);
 --  * a redraw only happens when the count of an item the route actually uses has changed;
 --  * and changes are batched over two seconds.
-local bagsQueued, lastSig
+local lastSig
+local lastActivity, idleWaiting, idleFull, idleSince = 0, false, false, 0
+-- Crafting touches your bags and skill every second or two, and planning the route takes a fraction of a second
+-- (more on a big profession): doing it each time made the game stutter in a steady beat while you crafted. So
+-- changes only note that something happened, and the route is refreshed once you have been quiet for a few
+-- seconds (or 20 s have passed). full: a skill change, which the comparison cards need to plan again for.
 local function openWindow()
   return ns.AnyWindowShown and ns.AnyWindowShown()
 end
@@ -176,21 +182,40 @@ local function bagSignature()
   return table.concat(parts, ",")
 end
 
-local bagFrame = CreateFrame("Frame")
-bagFrame:RegisterEvent("BAG_UPDATE_DELAYED")
-bagFrame:SetScript("OnEvent", function()
-  if bagsQueued then return end
-  bagsQueued = true
-  C_Timer.After(2, function()
-    bagsQueued = nil
-    if not openWindow() then
-      if ns.InvalidatePlan then ns.InvalidatePlan() end -- recomputed when a window is next opened
-      lastSig = nil
-      return
-    end
+local function runIdleRefresh()
+  idleWaiting = false
+  local full = idleFull
+  idleFull = false
+  if not openWindow() then
+    if ns.InvalidatePlan then ns.InvalidatePlan() end -- recomputed when a window is next opened
+    lastSig = nil
+    return
+  end
+  if not full then
     local sig = bagSignature()
     if sig == lastSig then return end -- nothing the route uses has changed
     lastSig = sig
-    if ns.RefreshUI then ns.RefreshUI(true) end -- soft: the comparison cards keep their plans
-  end)
-end)
+  end
+  if ns.RefreshUI then ns.RefreshUI(not full) end -- soft: the comparison cards keep their plans
+end
+
+local function idleTick()
+  if GetTime() - lastActivity < 3 and GetTime() - idleSince < 20 then
+    return C_Timer.After(1, idleTick) -- still crafting: wait
+  end
+  runIdleRefresh()
+end
+
+function ns.NoteActivity() lastActivity = GetTime() end
+
+function ns.RefreshWhenIdle(full)
+  lastActivity = GetTime()
+  idleFull = idleFull or full or false
+  if idleWaiting then return end
+  idleWaiting, idleSince = true, GetTime()
+  C_Timer.After(1, idleTick)
+end
+
+local bagFrame = CreateFrame("Frame")
+bagFrame:RegisterEvent("BAG_UPDATE_DELAYED")
+bagFrame:SetScript("OnEvent", function() ns.RefreshWhenIdle(false) end)

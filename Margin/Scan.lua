@@ -192,6 +192,7 @@ function ns.Scan(verbose)
   ns.PerfNote("scan", debugprofilestop() - t0)
 end
 
+local trailing
 local f = CreateFrame("Frame")
 f:RegisterEvent("TRADE_SKILL_LIST_UPDATE")
 f:RegisterEvent("TRADE_SKILL_SHOW")
@@ -213,7 +214,14 @@ f:SetScript("OnEvent", function(_, event)
     -- recipe each time was a lot of work and garbage. Read again when your skill changed or the read is old.
     local base = T.GetBaseProfessionInfo and T.GetBaseProfessionInfo()
     local last = base and base.professionName and ns.Char().profs[base.professionName]
-    if last and last.skill == base.skillLevel and time() - (last.time or 0) < 30 then return end
+    if last and time() - (last.time or 0) < 20 then
+      -- read recently: not again for every craft; one catch-up read when the gap is over, to pick up new colours
+      if not trailing then
+        trailing = true
+        C_Timer.After(21 - (time() - (last.time or 0)), function() trailing = nil; ns.Scan(false) end)
+      end
+      return
+    end
   end
   pending = true
   C_Timer.After(0.5, function() pending = nil; ns.Scan(false) end)

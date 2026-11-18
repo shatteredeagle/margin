@@ -246,4 +246,9 @@ end
 -- prices and bags move: keep an open planner current
 local ev = CreateFrame("Frame")
 ev:RegisterEvent("BAG_UPDATE_DELAYED")
-ev:SetScript("OnEvent", function() if frame and frame:IsShown() then ns.RefreshQuote() end end)
+local quoteQueued
+ev:SetScript("OnEvent", function()
+  if quoteQueued or not (frame and frame:IsShown()) then return end
+  quoteQueued = true
+  C_Timer.After(1.5, function() quoteQueued = nil; if frame and frame:IsShown() then ns.RefreshQuote() end end)
+end)

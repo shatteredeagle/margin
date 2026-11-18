@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **No more stutter while crafting.** Every craft changes your bags (and now and then your skill), and each change re-planned the route and redrew the window every couple of seconds. Margin now waits until you have stopped crafting for about 3 seconds (20 at the most) and refreshes once. The profession rescan keeps at least 20 seconds between reads and does one catch-up read afterwards, and the craft planner's own bag refresh is spaced out.
+
 - The shopping list's step button is now a dropdown: Whole route, Next step, any single step, or the craft plan's list (from the Profit tab's craft planner). It has its own row in the shopping list header.
 
 - **Route planning is about 3x faster, and crafting no longer replans everything.** Measured in game, one plan took ~560 ms and a refresh (the route plus the four comparison cards) ~2.2 s, repeated every couple of seconds while crafting: that was the FPS sawtooth. Planning now skips pricing the AH listings for recipes that cannot win (same route, same numbers), remembers each recipe's skill-up odds and each item's total supply, and a bag change replans only the route you follow: the comparison cards keep their plans until prices, scans or settings change. `/margin perf` shows the timings.
