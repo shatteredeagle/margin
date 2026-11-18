@@ -102,6 +102,7 @@ function Obj.GetObjectType(o) return o._type end
 function Obj.IsForbidden() return false end
 function Obj.IsMouseEnabled() return true end
 function Obj.SetSize(o, w, h) o._w, o._h = w, h end
+function Obj.GetEffectiveScale() return 1 end
 function Obj.SetWidth(o, w) o._w = w end
 function Obj.SetHeight(o, h) o._h = h end
 function Obj.GetWidth(o) return o._w end
@@ -184,6 +185,7 @@ UISpecialFrames = {}
 tinsert = table.insert
 function wipe(t) for k in pairs(t) do t[k] = nil end return t end
 time = os.time
+GetCursorPosition = function() return 400, 300 end
 debugprofilestop = function() return os.clock() * 1000 end
 date = os.date
 local now = 1000
@@ -549,6 +551,37 @@ do
   SlashCmdList.MARGIN("step all")
   assert(ns.S.shopStep == nil, "/margin step all")
 end
+-- ignoring a craft: right-click a step row, choose "Ignore craft", and it leaves the route; the setting brings it back
+do
+  local plan = ns.CurrentPlan()
+  local seg
+  for _, sg in ipairs(plan.segs) do if not sg.gap then seg = sg; break end end
+  assert(seg, "route has a step")
+  local id = seg.row.r.id
+  local row
+  win.list:SetOffset(0)
+  for _, r in ipairs(shownRows(win.list)) do
+    if r.entry.kind == "step" and r.entry.craft and r.entry.craft.id == id then row = r; break end
+  end
+  assert(row, "step row shown")
+  local before = openRecipeCalls
+  row:GetScript("OnClick")(row, "RightButton")
+  assert(openRecipeCalls == before, "right-click does not open the recipe")
+  assert(not ns.IsIgnored(id))
+  ns.SetCraftIgnored(id, seg.row.r.name, seg.row.r.prof, true) -- what the menu item does
+  assert(ns.IsIgnored(id) and #ns.IgnoredList() == 1)
+  for _, sg in ipairs(ns.CurrentPlan().segs) do
+    assert(sg.gap or sg.row.r.id ~= id, "an ignored craft is not in the route")
+  end
+  for _, r in ipairs(ns.Evaluate(ns.Char().profs.Leatherworking, nil, true)) do assert(r.r.id ~= id) end
+  SlashCmdList.MARGIN("ignored")
+  SlashCmdList.MARGIN("unignore nothing-matches")
+  SlashCmdList.MARGIN("unignore " .. seg.row.r.name:sub(1, 5):lower())
+  assert(not ns.IsIgnored(id) and #ns.IgnoredList() == 0, "/margin unignore brings it back")
+  ns.SetCraftIgnored(id, seg.row.r.name, seg.row.r.prof, true)
+  ns.SetCraftIgnored(id, seg.row.r.name, seg.row.r.prof, false)
+  assert(not ns.IsIgnored(id))
+end
 for _ = 1, 30 do visitRows(win.list, true) end
 win.list:SetOffset(0)
 for i = 1, 40 do
@@ -579,6 +612,8 @@ for _, ctl in ipairs(win.settings.controls) do
       click(ctl.buttons[1])
     elseif def.kind == "check" then
       click(ctl); click(ctl); hover(ctl)
+    elseif def.kind == "button" then
+      click(ctl); hover(ctl)
     else
       ctl:SetFocus(); ctl:SetText("30"); ctl:GetScript("OnEnterPressed")(ctl)
       ctl:SetFocus(); ctl:SetText("x"); ctl:GetScript("OnEscapePressed")(ctl)

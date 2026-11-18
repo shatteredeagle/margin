@@ -17,12 +17,37 @@ ns.CHANCE = ODDS.typical -- kept for older callers; use ns.Odds
 
 -- Output item -> recipe, over every scanned profession of this character, so a
 -- reagent you can craft yourself is priced at its craft cost when that is cheaper.
+-- Crafts you ignore (a recipe your server never has, say): left out of every list, route and craft plan, and not
+-- used as a way to make an ingredient. Shared by all characters: MarginDB.ignored[recipeID] = { name, prof }.
+local function ignored(id)
+  return id and MarginDB and MarginDB.ignored and MarginDB.ignored[id] and true or false
+end
+ns.IsIgnored = ignored
+
+function ns.IgnoreCraft(id, name, prof)
+  if not (id and MarginDB) then return end
+  MarginDB.ignored = MarginDB.ignored or {}
+  MarginDB.ignored[id] = { name = name or ("recipe " .. id), prof = prof }
+end
+
+function ns.UnignoreCraft(id)
+  if MarginDB and MarginDB.ignored then MarginDB.ignored[id] = nil end
+end
+
+-- The ignored crafts, by name: { { id, name, prof } }.
+function ns.IgnoredList()
+  local out = {}
+  for id, v in pairs(MarginDB and MarginDB.ignored or {}) do out[#out + 1] = { id = id, name = v.name, prof = v.prof } end
+  table.sort(out, function(a, b) return a.name < b.name end)
+  return out
+end
+
 local function craftIndex(profs)
   local idx = {}
   for name, prof in pairs(profs) do
     for _, r in ipairs(prof.recipes) do
       r.prof = r.prof or name
-      if r.out and not idx[r.out] then idx[r.out] = r end
+      if r.out and not idx[r.out] and not ignored(r.id) then idx[r.out] = r end
     end
   end
   return idx
@@ -123,6 +148,7 @@ function ns.Evaluate(prof, profs, includeTrainer, includeAll)
     end
   end
   for _, r in ipairs(list) do
+   if not ignored(r.id) then
     local cost, lines, missing = ns.RecipeCost(r, idx)
     local vend, ah = ns.Revenue(r)
     local chance = ns.Odds(r.diff) * r.ups
@@ -147,6 +173,7 @@ function ns.Evaluate(prof, profs, includeTrainer, includeAll)
       -- brings the cost down to zero, and the more reliable recipe wins a tie.
       rankPer = chance > 0 and math.max(cost - resale, 0) / chance or nil,
     }
+   end
   end
   return rows
 end

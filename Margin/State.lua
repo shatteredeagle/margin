@@ -114,6 +114,14 @@ function ns.ShopStepLabel(plan)
   return ("step %d-%d: %s"):format(seg.from, seg.to, seg.row.r.name)
 end
 
+-- Ignore (or take back) a craft everywhere: the routes that used it are planned again.
+function ns.SetCraftIgnored(id, name, prof, on)
+  if on then ns.IgnoreCraft(id, name, prof) else ns.UnignoreCraft(id) end
+  for pname in pairs(ns.Char().profs) do ns.ClearLock(pname) end
+  ns.Print(on and ("ignoring " .. (name or id) .. " (Settings > Ignored crafts to bring it back)") or ("no longer ignoring " .. (name or id)))
+  if ns.RefreshUI then ns.RefreshUI() end
+end
+
 function ns.SetTab(tab)
   S.tab = tab
 end

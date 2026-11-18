@@ -133,7 +133,7 @@ end
 local function makeRow(list)
   local row = CreateFrame("Button", nil, list)
   row:SetHeight(T.size.row)
-  row:RegisterForClicks("LeftButtonUp")
+  row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
   row.band = W.Solid(row, "panel2", "BACKGROUND")
   row.band:SetAllPoints()
   row.bandTop = W.Solid(row, "border", "BORDER")
@@ -168,9 +168,17 @@ local function makeRow(list)
     if not self.entry then return false end
     return ns.Tips.Entry(tt, self.entry)
   end, "ANCHOR_RIGHT")
-  row:SetScript("OnClick", function(self)
+  row:SetScript("OnClick", function(self, button)
     local e = self.entry
     if not e then return end
+    if button == "RightButton" then
+      -- a craft you cannot get (a recipe your server never sells): leave it out of everything
+      local c = e.craft
+      if c and c.id and not (e.kind == "section") then
+        W.PopupMenu({ { "Ignore craft: " .. (c.name or ("recipe " .. c.id)), function() ns.SetCraftIgnored(c.id, c.name, c.profession, true) end } })
+      end
+      return
+    end
     if e.kind == "section" and e.collapsible then
       if e.key == "history" then S.showHistory = not S.showHistory else S.showStock = not S.showStock end
       return ns.RefreshUI()
@@ -475,6 +483,8 @@ local function buildSettings()
         ctl = W.Segmented(p, { options = opts, onChange = function(v) UI.SetSetting(def, v) end })
       elseif def.kind == "check" then
         ctl = W.Checkbox(p, { onChange = function(v) UI.SetSetting(def, v) end })
+      elseif def.kind == "button" then
+        ctl = W.Button(p, { width = 110, height = 22, text = def.text(), onClick = def.onClick })
       else
         ctl = W.NumberBox(p, { width = 50,
           onCommit = function(text) UI.SetSetting(def, text) end,
@@ -513,8 +523,10 @@ end
 local function syncSettings()
   for _, ctl in ipairs(win.settings.controls) do
     local def = ctl.def
-    local v = UI.SettingValue(def)
-    if def.kind == "segmented" then
+    local v = def.kind ~= "button" and UI.SettingValue(def) or nil
+    if def.kind == "button" then
+      ctl:SetText(def.text())
+    elseif def.kind == "segmented" then
       ctl:SetValue(v)
     elseif def.kind == "check" then
       ctl:SetChecked(v)

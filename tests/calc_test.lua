@@ -556,4 +556,22 @@ do
   ns.Owned = function() return 0 end
   MarginDB = nil
 end
+
+-- ignored crafts: out of the evaluation, the route, and the ways to make an ingredient
+do
+  local keep = MarginDB
+  MarginDB = {}
+  local Ra = { id = 701, out = 9, qty = 1, diff = 0, ups = 1, trivial = 400, reagents = { {item = 1, count = 1} } }
+  local Rb = { id = 702, out = 9, qty = 1, diff = 0, ups = 1, trivial = 400, reagents = { {item = 2, count = 1} } }
+  local pi = { skill = 10, max = 60, recipes = { Ra, Rb } }
+  assert(#ns.Evaluate(pi, { pi }) == 2)
+  ns.IgnoreCraft(701, "Ra", "Test")
+  assert(ns.IsIgnored(701) and not ns.IsIgnored(702) and #ns.IgnoredList() == 1)
+  local rowsI = ns.Evaluate(pi, { pi })
+  assert(#rowsI == 1 and rowsI[1].r.id == 702, "an ignored recipe is not evaluated")
+  for _, seg in ipairs(ns.Plan(pi, 14, { pi }, false).segs) do assert(seg.gap or seg.row.r.id == 702) end
+  ns.UnignoreCraft(701)
+  assert(#ns.Evaluate(pi, { pi }) == 2 and #ns.IgnoredList() == 0)
+  MarginDB = keep
+end
 print("calc ok")

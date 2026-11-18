@@ -680,6 +680,63 @@ end
 -- list when it opens; o.onSelect(value). A click anywhere else closes it.
 ---------------------------------------------------------------------------
 
+-- A small menu at the mouse: items = { { text, fn } }. Click anywhere else closes it.
+local popup
+function W.PopupMenu(items)
+  if not popup then
+    popup = {}
+    popup.catcher = CreateFrame("Button", nil, UIParent)
+    popup.catcher:SetAllPoints(UIParent)
+    popup.catcher:SetFrameStrata("DIALOG")
+    popup.catcher:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+    popup.catcher:Hide()
+    popup.menu = W.Panel(UIParent, "panel", "border")
+    popup.menu:SetFrameStrata("DIALOG")
+    popup.menu:SetFrameLevel(popup.catcher:GetFrameLevel() + 5)
+    popup.menu:Hide()
+    popup.items = {}
+    function popup.Close() popup.menu:Hide(); popup.catcher:Hide() end
+    popup.catcher:SetScript("OnClick", popup.Close)
+  end
+  if #items == 0 then return popup.Close() end
+  local width = 190
+  for i, it in ipairs(items) do
+    local b = popup.items[i]
+    if not b then
+      b = CreateFrame("Button", nil, popup.menu)
+      b:SetHeight(22)
+      b.hl = W.Solid(b, "panel2")
+      b.hl:SetAllPoints()
+      b.hl:Hide()
+      b.text = W.Text(b, "row", "text")
+      b.text:SetPoint("LEFT", 8, 0)
+      b.text:SetPoint("RIGHT", -8, 0)
+      b:SetScript("OnEnter", function() b.hl:Show() end)
+      b:SetScript("OnLeave", function() b.hl:Hide() end)
+      b:SetScript("OnClick", function()
+        popup.Close()
+        if b.fn then b.fn() end
+      end)
+      popup.items[i] = b
+    end
+    b.fn = it[2]
+    b.text:SetText(it[1])
+    width = math.max(width, math.min(360, b.text:GetStringWidth() + 20))
+    b:ClearAllPoints()
+    b:SetPoint("TOPLEFT", 1, -1 - (i - 1) * 22)
+    b:SetPoint("TOPRIGHT", -1, -1 - (i - 1) * 22)
+    b:Show()
+  end
+  for i = #items + 1, #popup.items do popup.items[i]:Hide() end
+  popup.menu:SetSize(width, #items * 22 + 2)
+  local x, y = GetCursorPosition()
+  local scale = UIParent:GetEffectiveScale()
+  popup.menu:ClearAllPoints()
+  popup.menu:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", x / scale - 8, y / scale + 8)
+  popup.catcher:Show()
+  popup.menu:Show()
+end
+
 function W.Dropdown(parent, o)
   local d
   d = W.Button(parent, { width = o.width or 170, height = o.height or 24, justify = "LEFT", font = "row",

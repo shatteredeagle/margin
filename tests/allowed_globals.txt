@@ -20,6 +20,7 @@ ExpandFactionHeader
 GameTooltip
 GameTooltip_Hide
 GetBuildInfo
+GetCursorPosition
 GetFactionInfo
 GetItemCount
 GetMerchantItemID

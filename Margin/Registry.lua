@@ -57,7 +57,7 @@ end
 
 function UI.Columns(tab) return UI.columns[tab] or {} end
 
--- Settings panel entries: { group, key, kind = "segmented" | "check" | "number", label, hint,
+-- Settings panel entries: { group, key, kind = "segmented" | "check" | "number" | "button" (text = fn(), onClick = fn()), label, hint,
 --   options = { { value, label } } (segmented), get = fn() / set = fn(v) (when not a plain option),
 --   percent = true (number shown as 0-100, stored as a fraction), apply = fn(v), order }
 function UI.RegisterSetting(def)

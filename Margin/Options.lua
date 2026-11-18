@@ -88,6 +88,21 @@ S({ group = "Planning", key = "routeTarget", kind = "number", label = "Route tar
 S({ group = "Planning", key = "useRep", kind = "check", label = "Use my reputation",
   hint = "Off: base prices, no rep-locked patterns (worst case)" })
 
+S({ group = "Planning", key = "ignored", kind = "button", label = "Ignored crafts",
+  hint = "Crafts left out of every list and route. Right-click a row to ignore one; click here to bring one back",
+  text = function()
+    local n = #ns.IgnoredList()
+    return n == 0 and "None" or (n .. " ignored")
+  end,
+  onClick = function()
+    local items = {}
+    for _, c in ipairs(ns.IgnoredList()) do
+      items[#items + 1] = { "Stop ignoring: " .. c.name, function() ns.SetCraftIgnored(c.id, c.name, c.prof, false) end }
+    end
+    if #items == 0 then return ns.Print("no crafts are ignored (right-click a recipe row to ignore it)") end
+    ns.W.PopupMenu(items)
+  end })
+
 S({ group = "Appearance", groupOrder = 50, column = 1, key = "theme", kind = "segmented", label = "Window layout",
   hint = "Switches at once; /margin theme works too",
   options = function()

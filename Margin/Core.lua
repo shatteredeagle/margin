@@ -120,6 +120,21 @@ SlashCmdList.MARGIN = function(msg)
       if ns.RefreshUI then ns.RefreshUI() end
     end
     ns.Print("skill-up odds:", ns.Opt("odds"), "(/margin odds worst | typical)")
+  elseif msg == "ignored" or msg:match("^unignore") then
+    -- /margin ignored lists them; /margin unignore <name or id> brings one back
+    local want = msg:match("^unignore%s+(.+)$")
+    local list = ns.IgnoredList()
+    if not want then
+      if #list == 0 then return ns.Print("no crafts are ignored (right-click a recipe row in the Ledger)") end
+      for _, c in ipairs(list) do ns.Print(("ignored: %s (%d)"):format(c.name, c.id)) end
+      return ns.Print("/margin unignore <name or id> brings one back")
+    end
+    for _, c in ipairs(list) do
+      if tostring(c.id) == want or c.name:lower():find(want, 1, true) then
+        return ns.SetCraftIgnored(c.id, c.name, c.prof, false)
+      end
+    end
+    ns.Print("no ignored craft matches " .. want)
   elseif msg == "perf" then
     ns.PerfReport()
   elseif msg == "perf reset" then

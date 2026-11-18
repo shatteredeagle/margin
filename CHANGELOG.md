@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Ignore a craft.** Right-click a recipe row in the Ledger (a Route step, or a Profit or Leveling row) and choose "Ignore craft" for a recipe you cannot get (a limited vendor recipe your server never has, say). It leaves every list, route and craft plan, is not used as a way to make an ingredient, and the routes that used it are planned again. To bring one back: Settings > Ignored crafts (pick it from the menu), or `/margin ignored` and `/margin unignore <name>`. Shared by all your characters.
+
 - **Less background work (FPS sawtooth).** The profession list updates on every craft, filter and search while a profession window is open, and each update re-read all ~600 recipes and redrew; it now reads again only when your skill changed or the last read is 30 seconds old. The spell-cast listener now hears only your own casts (it heard everyone's). `/margin perf` shows how long scans, route plans and redraws take (count, average, worst); `/margin perf reset` clears it.
 
 - **The craft planner makes a shopping list.** A "Shopping list" button in the craft planner sends what that craft needs (after what you hold, with AH shortages flagged) to the AH shopping list, the vendor Buy tab and the AH button count. The step button in the shopping list now chooses between the whole route, each route step, and the craft plan (`/margin step craft`, `/margin step all`, `/margin step 2`); the craft plan is remembered while you switch.
