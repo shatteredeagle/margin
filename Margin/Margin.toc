@@ -24,7 +24,11 @@ Progress.lua
 State.lua
 Registry.lua
 Widgets.lua
+ViewModel.lua
+Tooltips.lua
+Options.lua
 UI.lua
+Ledger.lua
 Quote.lua
 Dump.lua
 FullScan.lua
