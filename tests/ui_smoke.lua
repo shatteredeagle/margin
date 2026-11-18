@@ -103,6 +103,7 @@ function Obj.IsForbidden() return false end
 function Obj.IsMouseEnabled() return true end
 function Obj.SetSize(o, w, h) o._w, o._h = w, h end
 function Obj.GetEffectiveScale() return 1 end
+function Obj.GetAlpha() return 1 end
 function Obj.SetWidth(o, w) o._w = w end
 function Obj.SetHeight(o, h) o._h = h end
 function Obj.GetWidth(o) return o._w end
