@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.1-alpha
 
 - **Fixed: Margin thought you held items you had used.** An AH purchase counts as yours while it is still in the mail, and that was worked out as "the bags should reach the count you had plus what you bought". Use some of the items first (crafting) and the bags stayed under that number, so the difference stayed counted as on the way for up to a week. A purchase now counts only until the bag count rises by what arrived; using items never adds to it. Old purchase records are dropped once.
 
