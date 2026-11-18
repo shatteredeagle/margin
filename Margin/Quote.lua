@@ -42,6 +42,8 @@ local function build()
   frame:SetScript("OnDragStart", frame.StartMoving)
   frame:SetScript("OnDragStop", frame.StopMovingOrSizing)
   frame:SetFrameStrata("HIGH")
+  frame:SetToplevel(true)         -- clicking it raises it above the other Margin windows
+  frame:SetClampedToScreen(true)
   frame:SetScript("OnMouseWheel", function(_, d)
     local max = quote and math.max(0, #quote.list - ROWS) or 0
     offset = math.max(0, math.min(max, offset - d * 2))
@@ -223,7 +225,17 @@ function ns.OpenQuote(r)
   recipe = r
   qty = math.max(1, (MarginDB.quoteQty and MarginDB.quoteQty[r.id]) or 5)
   offset = 0
+  -- beside the main window when it is open (never on top of it), else the middle of the screen
+  local main = _G.MarginFrame
+  frame:ClearAllPoints()
+  if main and main:IsShown() then
+    frame:SetPoint("TOPLEFT", main, "TOPRIGHT", 6, 0)
+    frame:SetFrameLevel(main:GetFrameLevel() + 10)
+  else
+    frame:SetPoint("CENTER", 120, 0)
+  end
   frame:Show()
+  frame:Raise()
   ns.RefreshQuote()
 end
 
