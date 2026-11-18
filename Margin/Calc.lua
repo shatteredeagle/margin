@@ -200,7 +200,10 @@ function ns.MissingItems(profs, includeOutputs, includeRecipes, includeAll, only
   local searched = (not ignoreSearched and MarginDB and MarginDB.searched) or {}
   local function add(id)
     -- an item looked up in the last 12 hours that still has no price has no listing: do not nag
-    if id and not seen[id] and not (searched[id] and searched[id] > recent)
+    -- a full scan or search that showed an empty book (nothing for sale) already answered for this item
+    local d = ns.Depth and ns.Depth(id)
+    local known = d and not d.capped and #d.p == 0
+    if id and not seen[id] and not (searched[id] and searched[id] > recent) and not known
       and not (ns.ItemExists and not ns.ItemExists(id)) then
       seen[id] = true
       out[#out + 1] = id

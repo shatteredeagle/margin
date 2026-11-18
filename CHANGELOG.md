@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- The AH lookup names the items it found no listing for after each round, and asks for them again after about 2 hours (was 12), so an item a search missed is not skipped for half a day. Items a Full scan or search showed to have nothing for sale are left out of the "to look up" count.
+
 - **Craft planner.** Click a recipe on the Profit tab: choose how many to craft (type it, +/-, 5/10/25, or Max for what you hold) and see what to make first, what to buy (after what you hold, with AH shortages flagged), what you pay now, the full cost, what it sells for and the net profit at vendor and AH prices. A button opens the recipe in the profession window with that many. It also works out how many crafts are still worth doing: ingredients are bought from the AH listings cheapest first, so each batch costs more than the last, and it finds the point where the next craft would lose money (or the AH runs out). A "Best" button sets that many.
 
 - Route tab: a "Crafted stock" row at the top shows what the route has made and you are holding, worth what at a vendor and on the AH (after the cut and the lost-deposit risk); click it for the items. It never includes anything a later step uses as a reagent.
