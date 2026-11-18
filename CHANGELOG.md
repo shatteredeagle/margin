@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Fixed: selecting a recipe in the profession window was called from a timer, which the game blocks for this protected function (that is why it only worked sometimes). The recipe is now selected directly in your click; the timer only waits for the window and fills in the number. If the window opens on another recipe it says so, and one more click selects it.
+
+## Unreleased
+
 - Items an older lookup had marked "searched" (and so hidden from the AH button for 12 hours) are asked for again straight away after this update.
 
 ## 0.1.7-alpha

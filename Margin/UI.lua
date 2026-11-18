@@ -162,49 +162,37 @@ function ns.OpenRecipe(id, count, professionName)
   local T = C_TradeSkillUI
   if not (T and T.OpenRecipe) then ns.Print("This client has no profession window API."); return end
 
-  local function select()
-    local started, announced = GetTime(), false
-    local ticker
-    ticker = C_Timer.NewTicker(0.25, function()
-      local sel = selectedRecipe()
-      local elapsed = GetTime() - started
-      if T.IsDataSourceChanging and T.IsDataSourceChanging() and elapsed < 5 then return end -- still loading
-      if sel == id or (sel == nil and elapsed > 1.2) then
-        -- right recipe (or the window will not say, so give it a moment): fill the number, twice
-        ticker:Cancel()
-        if not fillCount(count, false) and count and not announced then
-          ns.Print(("Craft %d of it (the window has no quantity box here)."):format(count))
-        end
-        C_Timer.After(0.5, function() fillCount(count, true) end)
-        debugPrint("recipe", id, "selected:", tostring(sel), "after", ("%.1fs"):format(elapsed))
-      elseif elapsed > 6 then
-        ticker:Cancel()
-        ns.Print("Could not select that recipe in the window. Pick it by hand.")
-        debugPrint("gave up; the window shows", tostring(sel))
-      else
-        pcall(T.OpenRecipe, id) -- not there yet, or reset to the top of the list: ask again
-      end
-    end)
-  end
-
+  -- OpenRecipe and OpenTradeSkill are protected: the game only lets an addon call them while it is handling
+  -- your click, never from a timer (calling them later is blocked and logged as ADDON_ACTION_BLOCKED, which
+  -- is why selecting a recipe used to work only sometimes). So both are called right here, in the click. The
+  -- timer below only watches, and fills in the number once the window shows the recipe.
   local function showing()
     local base = T.GetBaseProfessionInfo and T.GetBaseProfessionInfo()
     return T.IsTradeSkillReady and T.IsTradeSkillReady() and base and base.professionName == professionName
   end
-  if showing() then return select() end
-
   local prof = professionName and ns.Char().profs[professionName]
-  if prof and prof.id and T.OpenTradeSkill then pcall(T.OpenTradeSkill, prof.id) end
-  local tries = 0
-  local function wait()
-    tries = tries + 1
-    if showing() and ProfessionsFrame and ProfessionsFrame:IsShown() then
-      return C_Timer.After(0.4, select) -- give the list a moment to load
+  if not showing() and prof and prof.id and T.OpenTradeSkill then pcall(T.OpenTradeSkill, prof.id) end
+  pcall(T.OpenRecipe, id)
+
+  local started, ticker = GetTime(), nil
+  ticker = C_Timer.NewTicker(0.25, function()
+    local sel = selectedRecipe()
+    local elapsed = GetTime() - started
+    if T.IsDataSourceChanging and T.IsDataSourceChanging() and elapsed < 5 then return end -- still loading
+    if sel == id or (sel == nil and elapsed > 1.2) then
+      ticker:Cancel()
+      if not fillCount(count, false) and count then
+        ns.Print(("Craft %d of it (the window has no quantity box here)."):format(count))
+      end
+      C_Timer.After(0.5, function() fillCount(count, true) end)
+      debugPrint("recipe", id, "selected:", tostring(sel), "after", ("%.1fs"):format(elapsed))
+    elseif elapsed > 3 then
+      ticker:Cancel()
+      -- the window opened but on another recipe: selecting needs a click, so ask for one
+      ns.Print(("The window is on a different recipe. Click the recipe in Margin once more to select it."))
+      debugPrint("gave up; the window shows", tostring(sel))
     end
-    if tries < 16 then return C_Timer.After(0.25, wait) end
-    ns.Print(("Open your %s window first, then click again."):format(professionName or "profession"))
-  end
-  C_Timer.After(0.25, wait)
+  end)
 end
 
 local function build()
