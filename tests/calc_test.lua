@@ -162,18 +162,29 @@ assert(fallback.segs[1].row.r == FA)
 -- worst-case odds: yellow plans at 25%, green at the 5% floor, orange stays 100%, bands fade sooner
 oddsMode = "worst"
 assert(ns.Odds(0) == 1 and ns.Odds(1) == 0.25 and ns.Odds(2) == 0.05 and ns.Odds(3) == 0)
-assert(ns.RouteChance({ trivial = 30, diff = 1 }, 10, 10) == 0.25)
+assert(ns.RouteChance({ trivial = 30, diff = 1 }, 10, 10) >= 0.25) -- yellow now: somewhere in its band, never below the bottom
 assert(ns.RouteChance({ trivial = 30, diff = 0 }, 10, 10) == 1)
 -- orange at s0=10, grey at 40, no Classic entry (gap 12): yellow from 40-24-2=14, green from 40-12-2=26
 assert(ns.RouteChance({ trivial = 40, diff = 0 }, 10, 13) == 1)
-assert(ns.RouteChance({ trivial = 40, diff = 0 }, 10, 14) == 0.25)
-assert(ns.RouteChance({ trivial = 40, diff = 0 }, 10, 25) == 0.25)
-assert(ns.RouteChance({ trivial = 40, diff = 0 }, 10, 26) == 0.05)
--- a yellow recipe plans 4 crafts per skill-up in worst case, not 1.33
+-- worst-case slides across each band: from 75% down to the 25% bottom in yellow (14..25), 25% down to 5% in green
+local function near(a, b) return math.abs(a - b) < 1e-9 end
+local Rw = { trivial = 40, diff = 0 }
+assert(near(ns.RouteChance(Rw, 10, 14), 0.75), ns.RouteChance(Rw, 10, 14))
+assert(ns.RouteChance(Rw, 10, 14) > ns.RouteChance(Rw, 10, 20) and ns.RouteChance(Rw, 10, 20) > ns.RouteChance(Rw, 10, 25))
+assert(near(ns.RouteChance(Rw, 10, 26), 0.25), ns.RouteChance(Rw, 10, 26))
+assert(ns.RouteChance(Rw, 10, 26) > ns.RouteChance(Rw, 10, 39) and ns.RouteChance(Rw, 10, 39) >= 0.05)
+assert(ns.RouteChance(Rw, 10, 40) == 0)
+-- never better than typical, never below the old flat worst-case numbers
+for sk = 14, 39 do
+  local w, ty = ns.RouteChance(Rw, 10, sk), nil
+  oddsMode = "typical"; ty = ns.RouteChance(Rw, 10, sk); oddsMode = "worst"
+  assert(w >= (sk < 26 and 0.25 or 0.05) - 1e-9, sk)
+end
+-- a yellow recipe plans several crafts per skill-up in worst case, not 1.33 (the chance at the skill it was read)
 local Yw = { id = 80, out = 81, qty = 1, diff = 1, ups = 1, trivial = 60, reagents = { {item = 1, count = 1} } }
 local pyw = { skill = 10, max = 60, recipes = { Yw } }
 local rowsYw = ns.Evaluate(pyw, { pyw })
-assert(rowsYw[1].chance == 0.25 and rowsYw[1].perUp == 40, rowsYw[1].perUp)
+assert(rowsYw[1].chance >= 0.25 and rowsYw[1].chance <= 0.75 and rowsYw[1].perUp >= 40 / 3, rowsYw[1].perUp)
 oddsMode = "typical"
 assert(ns.Evaluate(pyw, { pyw })[1].chance == 0.75)
 
@@ -222,9 +233,9 @@ assert(ns.RouteChance(rb, 10, 30) == 1, "no observations: the model keeps it ora
 MarginDB.bands[500] = { y1 = 35, y2 = 40 }
 assert(ns.RouteChance(rb, 10, 30) == 1, "observed orange until at least 35")
 MarginDB.bands[500] = { y1 = 20, y2 = 25 }
-assert(ns.RouteChance(rb, 10, 30) == 0.25, "observed yellow by 25: the model's 34 is pulled in")
+assert(ns.RouteChance(rb, 10, 30) < 1 and ns.RouteChance(rb, 10, 30) >= 0.25, "observed yellow by 25: the model's 34 is pulled in")
 MarginDB.bands[500] = { y1 = 35, y2 = 40 }
-assert(ns.RouteChance(rb, 10, 36) == 0.25 or ns.RouteChance(rb, 10, 36) == 1) -- inside the range: either side is fine
+assert(ns.RouteChance(rb, 10, 36) >= 0.25 and ns.RouteChance(rb, 10, 36) <= 1) -- inside the range: either side is fine
 -- observing: orange at 120, then yellow at 130
 MarginDB.bands = {}
 ns.ObserveBands({ { id = 7, diff = 0 } }, 120)

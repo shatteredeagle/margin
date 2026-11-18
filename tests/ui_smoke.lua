@@ -245,11 +245,11 @@ local NAMES = {
   [2320] = "Coarse Thread", [2325] = "Black Dye", [8167] = "Turtle Scale", [3383] = "Elixir of Wisdom",
   [4265] = "Heavy Armor Kit", [4253] = "Barbaric Gloves", [5964] = "Barbaric Shoulders", [7277] = "Light Leather Bracers",
   [4249] = "Hillman's Belt", [7373] = "Dusky Leather Leggings", [8347] = "Turtle Scale Gloves", [8385] = "Pattern: Turtle Scale Gloves",
-  [2672] = "Stringy Wolf Meat", [2680] = "Spiced Wolf Meat", [2678] = "Mild Spices", [5966] = "Guardian Gloves",
+  [4237] = "Heavy Leather Ball", [2672] = "Stringy Wolf Meat", [2680] = "Spiced Wolf Meat", [2678] = "Mild Spices", [5966] = "Guardian Gloves",
 }
-local SELL = { [4265] = 700, [4253] = 1500, [5964] = 1800, [7277] = 100, [4249] = 600, [4236] = 100, [7373] = 2400,
+local SELL = { [4237] = 250, [4265] = 700, [4253] = 1500, [5964] = 1800, [7277] = 100, [4249] = 600, [4236] = 100, [7373] = 2400,
   [8347] = 2500, [4234] = 150, [2680] = 50, [5966] = 2200 }
-local bags = { [4234] = 12, [4236] = 3, [4253] = 2, [4249] = 4, [4289] = 30, [5964] = 3 }
+local bags = { [4237] = 5, [4234] = 12, [4236] = 3, [4253] = 2, [4249] = 4, [4289] = 30, [5964] = 3 }
 
 C_Item = {}
 function C_Item.GetItemNameByID(id) return NAMES[id] end
@@ -311,7 +311,7 @@ function BuyMerchantItem(index, qty)
   bags[id] = (bags[id] or 0) + qty
 end
 
-local bagSlots = { { itemID = 5964, stackCount = 3 }, { itemID = 4236, stackCount = 3 }, { itemID = 4253, stackCount = 2 }, { itemID = 4249, stackCount = 4 }, { itemID = 4234, stackCount = 12 } }
+local bagSlots = { { itemID = 5964, stackCount = 3 }, { itemID = 4236, stackCount = 3 }, { itemID = 4253, stackCount = 2 }, { itemID = 4249, stackCount = 4 }, { itemID = 4234, stackCount = 12 }, { itemID = 4237, stackCount = 5 } }
 C_Container = {}
 function C_Container.GetContainerNumSlots(bag) return bag == 0 and #bagSlots or 0 end
 function C_Container.GetContainerItemInfo(bag, slot)
@@ -381,7 +381,7 @@ MarginDB.chars = { ["Tester-Realm"] = {
         recipe(9065, "Light Leather Bracers", 7277, 3, 100, { 2318, 6, 2320, 4 }),
         recipe(3767, "Hillman's Belt", 4249, 2, 165, { 2319, 4, 2321, 1 }),
         recipe(3770, "Guardian Gloves", 5966, 0, 190, { 4234, 4, 4236, 1, 3383, 1 }),
-        recipe(3777, "Heavy Leather Ball", nil, 1, 175, { 4234, 2, 2321, 1 }),
+        recipe(3777, "Heavy Leather Ball", 4237, 1, 175, { 4234, 2, 2321, 1 }),
       },
       unlearned = {
         recipe(9195, "Dusky Leather Leggings", 7373, 0, 195, { 4234, 10, 2325, 2 }, { train = { rank = 165, fee = 1500 } }),

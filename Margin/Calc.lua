@@ -264,6 +264,7 @@ function ns.RouteChance(r, s0, s)
   local early = ns.Opt("odds") ~= "typical" and 2 or 0
   local Y = H - 2 * w - early
   local G = H - w - early
+  local modelY, modelG = Y, G -- before what was seen narrows them: where the chance slides from and to
   -- what the game showed at the skill it was read: that is certain, so the edges must agree with it
   if r.diff == 0 then
     Y = math.max(Y, s0 + 1)                  -- orange now: yellow starts later
@@ -285,8 +286,16 @@ function ns.RouteChance(r, s0, s)
   end
   if G < Y then G = Y end
   if s < Y then return ns.Odds(0) end
-  if s < G then return ns.Odds(1) end
-  return ns.Odds(2)
+  -- a band seen to start earlier than modelled is slid from where it was seen to have started by
+  local band, from, to = 2, math.min(modelG, G), H
+  if s < G then band, from, to = 1, math.min(modelY, Y), math.min(modelG, G) end
+  if ns.Opt("odds") == "typical" or to <= from then return ns.Odds(band) end
+  -- worst-case slides across the band from the middle of its range down to the bottom (the 'worst' number),
+  -- as the real chance does, instead of being the bottom for every point of it: a green stretch of ten
+  -- levels used to plan 20 crafts per level all the way, when the first levels of it raise skill far more often
+  local top = band == 1 and ODDS.typical[1] or ODDS.typical[2]
+  local bottom = ns.Odds(band)
+  return top + (bottom - top) * math.max(0, math.min(1, (s - from) / (to - from)))
 end
 
 -- Remember the colour each learned recipe had at a skill. Orange at 120 means it stays orange
