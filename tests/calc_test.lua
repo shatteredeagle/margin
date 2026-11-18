@@ -458,6 +458,8 @@ assert(sorted[1].sortCost == 1 and sorted[2].sortCost == 5 and sorted[3].sortCos
 ns.Owned = function(id) return id == 1 and 3 or 0 end
 ns.Supply = function(id) return id == 2 and 4 or nil end
 ns.WalkCost = function(id, n) if id == 2 then return n * 60 end end
+ns.ShopOf = function(plan) return plan.shop end -- (State.lua picks a step; the stub always shows the whole route)
+ns.ShopStepLabel = function() return "whole route" end
 local rp = {
   target = 30, cost = 900, learnCost = 50, crafts = 12,
   segs = {

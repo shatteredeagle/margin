@@ -223,7 +223,7 @@ local function toBuyHere()
   local plan = ns.CurrentPlan()
   if not plan then return 0 end
   local n = 0
-  for _, it in ipairs(plan.shop) do
+  for _, it in ipairs((ns.ShopOf(plan))) do
     if it.src == "ah" and math.max(0, it.count - (it.recipe and 0 or ns.Owned(it.item))) > 0 then n = n + 1 end
   end
   return n

@@ -552,7 +552,24 @@ function ns.Plan(prof, target, profs, useTrainer, force)
   for _, seg in ipairs(segs) do
     if not seg.gap then
       local prep = { order = {}, byItem = {} }
-      expand(seg.row.r, math.ceil(seg.crafts), idx, acc, prep, left)
+      local sacc = {} -- this step's own materials (acc is the whole route)
+      expand(seg.row.r, math.ceil(seg.crafts), idx, sacc, prep, left)
+      for item, n in pairs(sacc) do acc[item] = (acc[item] or 0) + n end
+      seg.shop = {}
+      for item, n in pairs(sacc) do
+        local unit, src = ns.BuyPrice(item)
+        seg.shop[#seg.shop + 1] = { item = item, count = math.ceil(n - 1e-9), unit = unit, src = src }
+      end
+      table.sort(seg.shop, function(a, b) return (a.unit or 0) * a.count > (b.unit or 0) * b.count end)
+      local L = seg.row.learn
+      if L and L.how ~= "trainer" and L.item then -- the recipe item is bought with the first step that uses it
+        local first = true
+        for _, prev in ipairs(segs) do
+          if prev == seg then break end
+          if not prev.gap and prev.row == seg.row then first = false end
+        end
+        if first then seg.shop[#seg.shop + 1] = { item = L.item, count = 1, unit = L.fee, src = L.how, recipe = true } end
+      end
       seg.prep = {} -- intermediates to make before this step, in order
       for _, e in ipairs(prep.order) do
         seg.prep[#seg.prep + 1] = {

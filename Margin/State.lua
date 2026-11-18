@@ -54,6 +54,49 @@ function ns.CycleProfession()
   ns.Char().lastProf = S.prof
 end
 
+-- Which step the shopping lists show: nil is the whole route, else the index of one of the plan's steps. The
+-- point: when you cannot buy everything up front, buy what one step needs, craft, sell, then buy the next.
+function ns.ShopSteps(plan)
+  local steps = {}
+  for i, seg in ipairs(plan.segs) do
+    if not seg.gap and seg.shop then steps[#steps + 1] = { index = i, seg = seg } end
+  end
+  return steps
+end
+
+-- The shopping list to use for a plan: the whole route's, or the chosen step's (falls back to the whole
+-- route when that step no longer exists). Second result: the step (from, to, name) or nil.
+function ns.ShopOf(plan)
+  local want = S.shopStep
+  local seg = want and plan.segs[want]
+  if seg and not seg.gap and seg.shop then return seg.shop, seg end
+  return plan.shop, nil
+end
+
+function ns.SetShopStep(index)
+  S.shopStep = index
+  ns.Print(index and "shopping lists now show one step" or "shopping lists now show the whole route")
+end
+
+-- Next choice: whole route, then each step in turn, then back to the whole route.
+function ns.CycleShopStep(plan)
+  local steps = ns.ShopSteps(plan)
+  local nextIndex
+  if not S.shopStep then nextIndex = steps[1] and steps[1].index
+  else
+    for k, st in ipairs(steps) do
+      if st.index == S.shopStep then nextIndex = steps[k + 1] and steps[k + 1].index end
+    end
+  end
+  S.shopStep = nextIndex
+end
+
+function ns.ShopStepLabel(plan)
+  local _, seg = ns.ShopOf(plan)
+  if not seg then return "whole route" end
+  return ("step %d-%d: %s"):format(seg.from, seg.to, seg.row.r.name)
+end
+
 function ns.SetTab(tab)
   S.tab = tab
 end

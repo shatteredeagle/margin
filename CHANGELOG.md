@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **Shopping list by step.** When you cannot afford the whole route up front, shop one step at a time: buy what a step needs, craft, sell, then buy for the next. Click the Shopping list band on the Route tab (or the step button in the AH shopping list, or `/margin step 2`, `/margin step all`) to move through the steps; after the last one it shows the whole route again. The AH shopping list, the AH button count, the vendor Buy tab and the Route tab all follow the chosen step. A step's list includes the recipe item to buy for it. Each step's list is worked out on its own, so held stock is credited to the step that is showing.
+
 ## 0.2.0-alpha
 
 - Margin remembers the profession you last had open (or picked in Margin) and opens on it next time, per character.

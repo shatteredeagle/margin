@@ -164,7 +164,7 @@ local function compute()
   local plan = ns.CurrentPlan()
   if not plan then return 0 end
   local cost = 0
-  for _, it in ipairs(plan.shop) do
+  for _, it in ipairs((ns.ShopOf(plan))) do
     local transit = ns.Transit(it.item)
     local have = owned(it.item) + transit
     local buy = math.max(0, it.count - have)
@@ -270,8 +270,16 @@ local function build()
   head.line:SetPoint("BOTTOMLEFT"); head.line:SetPoint("BOTTOMRIGHT"); head.line:SetHeight(1)
   frame.info = W.Text(head, "small", "text")
   frame.info:SetPoint("LEFT", 10, 0)
+  frame.step = W.Button(head, { width = 130, height = 20, text = "Whole route",
+    onClick = function()
+      local plan = ns.CurrentPlan()
+      if plan then ns.CycleShopStep(plan) end
+      ns.RefreshUI()
+    end,
+    tooltip = { "Shop for one step", "Cannot afford everything at once? Pick a step to see only what it needs: buy that, craft, sell, then pick the next step. Click again to move on; after the last step it shows the whole route." } })
+  frame.step:SetPoint("RIGHT", -6, 0)
   frame.left = W.Text(head, "small", "text", "RIGHT")
-  frame.left:SetPoint("RIGHT", -10, 0)
+  frame.left:SetPoint("RIGHT", frame.step, "LEFT", -8, 0)
   frame.list = W.ScrollList(frame, { width = WIDTH - 10, height = HEIGHT - frame.top - 26 - 30,
     makeRow = makeRow, fill = fillRow,
     heightOf = function(e) return e.kind == "section" and 22 or 38 end })
@@ -298,6 +306,11 @@ function ns.RefreshShopping()
   frame.info:SetText(prof and ("%s %s to %s"):format(name, T.C("accent", prof.skill), T.C("accent", target))
     or "Open a profession window once to scan it.")
   frame.left:SetText(prof and (T.C("dim", "still to buy ") .. T.Money(cost)) or "")
+  do
+    local plan = ns.CurrentPlan()
+    local _, seg = plan and ns.ShopOf(plan)
+    frame.step.label:SetText(seg and ("Step %d-%d"):format(seg.from, seg.to) or "Whole route")
+  end
   frame.note:SetText(frame.open and "Search fills in the count; buying is your click."
     or "Open the auction house to search.")
   -- grouped: auction house, vendor, done; each with a band and its total

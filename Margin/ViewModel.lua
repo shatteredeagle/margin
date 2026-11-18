@@ -157,7 +157,7 @@ end
 -- costed by walking them cheapest first, and a shortage is called out. Returns rows, total still to buy.
 function VM.ShopRows(plan)
   local rows, left = {}, 0
-  for _, it in ipairs(plan.shop) do
+  for _, it in ipairs((ns.ShopOf(plan))) do
     local have = it.recipe and 0 or ns.Owned(it.item)
     local buy = math.max(0, it.count - have)
     local cost = it.unit and it.unit * buy or nil
@@ -213,7 +213,8 @@ function VM.RouteEntries(plan, o)
     end
   end
   local shop, left = VM.ShopRows(plan)
-  list[#list + 1] = { kind = "section", key = "shop", title = "Shopping list", hint = "still to buy", total = left }
+  list[#list + 1] = { kind = "section", key = "shop", title = "Shopping list", total = left, pick = true,
+    hint = ns.ShopStepLabel(plan) .. ", still to buy  (click: other step)" }
   for _, s in ipairs(shop) do list[#list + 1] = s end
   return list
 end

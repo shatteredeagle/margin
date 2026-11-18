@@ -73,7 +73,7 @@ local function compute()
   buyList = {}
   local plan = ns.CurrentPlan()
   if not plan then list = buyList; sellList = {}; return end
-  for _, it in ipairs(plan.shop) do
+  for _, it in ipairs((ns.ShopOf(plan))) do
     local index, price, stack, avail = findIndex(it.item)
     if index then
       local unit = price / stack

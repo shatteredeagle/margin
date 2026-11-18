@@ -102,6 +102,20 @@ SlashCmdList.MARGIN = function(msg)
     ns.Print("skill-up odds:", ns.Opt("odds"), "(/margin odds worst | typical)")
   elseif msg == "dump" then
     ns.Dump()
+  elseif msg:match("^step") then
+    -- /margin step 2 shows only the second step's shopping lists; /margin step all (or no number) the whole route
+    local n = tonumber(msg:match("^step%s+(%d+)"))
+    local plan = ns.CurrentPlan and ns.CurrentPlan()
+    if not plan then return ns.Print("open a profession window once first") end
+    local steps = ns.ShopSteps(plan)
+    if n and steps[n] then
+      ns.SetShopStep(steps[n].index)
+      ns.Print(ns.ShopStepLabel(plan))
+    else
+      ns.SetShopStep(nil)
+      if n then ns.Print(("this route has %d steps"):format(#steps)) end
+    end
+    if ns.RefreshUI then ns.RefreshUI() end
   elseif msg == "lock" then
     ns.SetOpt("routeLock", not ns.Opt("routeLock"))
     ns.Print(ns.Opt("routeLock") and "route locked until you press Re-plan" or "route re-plans whenever prices change")

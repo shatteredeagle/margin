@@ -58,3 +58,19 @@ do
   print("forced:", sig(forced), forced.cost, forced.shopCost)
   print(sig(free) == sig(forced) and "lock replay matches" or "LOCK REPLAY DIFFERS")
 end
+
+-- The per-step shopping lists must add up to the whole route's.
+do
+  local plan = ns.Plan(prof, 225, { Bench = prof }, true)
+  local sum, whole = {}, {}
+  for _, seg in ipairs(plan.segs) do
+    if not seg.gap then for _, it in ipairs(seg.shop) do if not it.recipe then sum[it.item] = (sum[it.item] or 0) + it.count end end end
+  end
+  for _, it in ipairs(plan.shop) do if not it.recipe then whole[it.item] = it.count end end
+  local bad = 0
+  for item, n in pairs(whole) do
+    -- each step rounds up on its own, so the steps may add up to a unit or two more than the whole route
+    if not sum[item] or sum[item] < n or sum[item] > n + #plan.segs then bad = bad + 1 end
+  end
+  print(bad == 0 and "per-step shopping adds up" or ("PER-STEP SHOPPING MISMATCH on " .. bad .. " items"))
+end

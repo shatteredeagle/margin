@@ -520,6 +520,33 @@ end
 assert(ns.S.showHistory and ns.S.showStock, "history and stock expanded")
 k = kinds(win.list)
 assert(k.history and k.stock, "expanded rows listed")
+-- shopping list by step: clicking its band walks the steps and back to the whole route, and a step's list is
+-- smaller than the whole route's
+do
+  local plan = ns.CurrentPlan()
+  local steps = ns.ShopSteps(plan)
+  local function sectionRow(list, key) -- the shopping band is at the bottom: scroll to it
+    for i, e in ipairs(list.entries) do
+      if e.kind == "section" and e.key == key then list:SetOffset(i - 1) end
+    end
+    for _, r in ipairs(shownRows(list)) do
+      if r.entry.kind == "section" and r.entry.key == key then return r end
+    end
+  end
+  assert(#steps >= 1, "route has steps with their own shopping")
+  local band = sectionRow(win.list, "shop")
+  assert(band and band.entry.pick, "shopping band offers a step choice")
+  assert(ns.S.shopStep == nil)
+  click(band)
+  assert(ns.S.shopStep == steps[1].index, "first click shows the first step")
+  assert(#(ns.ShopOf(plan)) <= #plan.shop)
+  for _ = 1, #steps do click(sectionRow(win.list, "shop")) end
+  assert(ns.S.shopStep == nil, "after the last step the whole route returns")
+  SlashCmdList.MARGIN("step 1")
+  assert(ns.S.shopStep == steps[1].index, "/margin step 1")
+  SlashCmdList.MARGIN("step all")
+  assert(ns.S.shopStep == nil, "/margin step all")
+end
 for _ = 1, 30 do visitRows(win.list, true) end
 win.list:SetOffset(0)
 for i = 1, 40 do
@@ -679,6 +706,10 @@ click(MarginAHStrip.lookup)
 fire("COMMODITY_SEARCH_RESULTS_UPDATED", 4234)
 fire("AUCTION_HOUSE_THROTTLED_SYSTEM_READY")
 flush()
+click(MarginShopping.step); hover(MarginShopping.step) -- one step's list
+ns.RefreshShopping()
+click(MarginShopping.step)
+while ns.S.shopStep do click(MarginShopping.step) end
 for _, r in ipairs(shownRows(MarginShopping.list)) do
   hover(r)
   if r.search and r.search:IsShown() then click(r.search) end

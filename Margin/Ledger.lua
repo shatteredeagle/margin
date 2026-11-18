@@ -162,7 +162,7 @@ local function makeRow(list)
   row.cost = W.Text(row, "small", "text", "RIGHT")
   row.sale = W.Text(row, "small", "text", "RIGHT")
   row.value = W.Text(row, "row", "text", "RIGHT")
-  row:SetScript("OnEnter", function(self) if self.entry and self.entry.kind ~= "section" or (self.entry and self.entry.collapsible) then self.hl:Show() end end)
+  row:SetScript("OnEnter", function(self) if self.entry and self.entry.kind ~= "section" or (self.entry and (self.entry.collapsible or self.entry.pick)) then self.hl:Show() end end)
   row:SetScript("OnLeave", function(self) self.hl:Hide() end)
   W.Tip(row, function(tt, self)
     if not self.entry then return false end
@@ -173,6 +173,11 @@ local function makeRow(list)
     if not e then return end
     if e.kind == "section" and e.collapsible then
       if e.key == "history" then S.showHistory = not S.showHistory else S.showStock = not S.showStock end
+      return ns.RefreshUI()
+    end
+    if e.kind == "section" and e.pick then
+      local plan = ns.CurrentPlan()
+      if plan then ns.CycleShopStep(plan) end
       return ns.RefreshUI()
     end
     if e.quote then return ns.OpenQuote(e.quote) end

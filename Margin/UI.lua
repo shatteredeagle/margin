@@ -538,7 +538,7 @@ local function routeEntries(plan)
   -- the shopping list: what the route needs, minus what you already hold. For AH items with known
   -- listings, the cost walks them cheapest first, and a shortage is called out.
   local shopRows, left = {}, 0
-  for _, it in ipairs(plan.shop) do
+  for _, it in ipairs((ns.ShopOf(plan))) do
     local have = it.recipe and 0 or ns.Owned(it.item)
     local buy = math.max(0, it.count - have)
     local cost = it.unit and it.unit * buy or nil
