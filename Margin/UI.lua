@@ -446,7 +446,9 @@ local function build()
       if not (e and (e.data or e.tip)) then return end
       GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
       if e.data then recipeTooltip(e.data) else e.tip(GameTooltip) end
-      if e.craft and not e.craft.learnFirst then
+      if e.quote then
+        GameTooltip:AddLine("Click: plan a craft run (pick how many; see what to buy, the cost and the profit).", 0.6, 0.9, 1)
+      elseif e.craft and not e.craft.learnFirst then
         GameTooltip:AddLine(e.craft.count and ("Click: open it in the profession window, craft %d."):format(e.craft.count)
           or "Click: open it in the profession window.", 0.6, 0.9, 1)
       end
@@ -456,6 +458,7 @@ local function build()
     row:SetScript("OnClick", function(self)
       local e = self.entry
       if e and e.action then return e.action() end
+      if e and e.quote then return ns.OpenQuote(e.quote) end
       local c = e and e.craft
       if not c then return end
       if c.learnFirst then
@@ -491,6 +494,7 @@ local function recipeEntry(d, kind, key)
   end
   local e = { icon = r.icon, data = d, sale = money(sale), sortName = r.name:lower(), sortSale = sale,
     craft = { id = r.id, profession = profName, name = r.name, learnFirst = (d.learn ~= nil) or (unlearned and true or false) },
+    quote = kind == "profit" and r or nil, -- Profit rows open the craft planner
     name = ("|cff%s%s|r%s"):format(unlearned and "80c0ff" or (DIFF_COLOR[r.diff] or "ffffff"), r.name, how) }
   if d.missing > 0 then
     e.cost = ("|cffff9090%d reagent%s unpriced|r"):format(d.missing, d.missing > 1 and "s" or "")
