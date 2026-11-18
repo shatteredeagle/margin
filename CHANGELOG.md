@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.3-alpha
+
+- Route: when learned recipes alone can't reach the target, the Steps header says where it gets stuck, and the gap row names the unlearned recipe that would carry on.
+- Route: the elbow on "make first" and "in your bags" rows now hangs down toward the craft they feed, so it no longer looks tied to the previous step.
+
 ## 0.2.2-alpha
 
 - **The Margin button on the profession window is harder to lose.** If nothing was free it went above the window's top-right corner, which is off screen when the window sits at the top of the screen; it now picks the first place that is on screen, and failing that sits inside the title bar. It also looks again whenever the profession window is shown, whatever event announced it. `/margin button` reports what it found (the window, the button, where it is) and places it again.

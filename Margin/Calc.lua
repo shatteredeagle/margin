@@ -605,6 +605,26 @@ function ns.Plan(prof, target, profs, useTrainer, force)
     skip[worst] = true
   end
 
+  -- learned recipes alone can't carry the route through a gap: say which unlearned recipe would
+  if not useTrainer then
+    local hasGap = false
+    for _, seg in ipairs(segs) do if seg.gap then hasGap = true end end
+    if hasGap then
+      local alt = ns.Plan(prof, target, profs, true, force)
+      for _, seg in ipairs(segs) do
+        if seg.gap then
+          for _, a in ipairs(alt.segs) do
+            if not a.gap and a.row.learn and a.from < seg.to and a.to > seg.from then
+              seg.suggest = seg.suggest or {}
+              seg.suggest[#seg.suggest + 1] = { name = a.row.r.name, rank = a.row.learn.rank, fee = a.row.learn.fee,
+                how = a.row.learn.how, from = a.from, to = a.to }
+            end
+          end
+        end
+      end
+    end
+  end
+
   local learn, learnCost = {}, 0
   for _, seg in ipairs(segs) do
     if not seg.gap and seg.row.learn then
@@ -664,8 +684,10 @@ function ns.Plan(prof, target, profs, useTrainer, force)
       shop[#shop + 1] = { item = l.item, count = 1, unit = l.fee, src = l.how, recipe = true }
     end
   end
+  local stallAt -- where the route runs out of recipes, when it can't reach the target
+  for _, seg in ipairs(segs) do if seg.gap then stallAt = seg.from; break end end
   return { segs = segs, cost = total, gross = gross, crafts = crafts, shop = shop, shopCost = shopCost,
-    target = target, learn = learn, learnCost = learnCost, constrained = constrained }
+    target = target, learn = learn, learnCost = learnCost, constrained = constrained, stallAt = stallAt }
 end
 
 -- The recipe chosen for each stretch of a plan, to lock a route, and back to a skill -> recipe table.

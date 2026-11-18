@@ -91,14 +91,17 @@ local function cells(e)
     return C("text", e.from .. "-" .. e.to), C(color, e.name), ("~%d crafts"):format(e.crafts), money(e.unit),
       signed(e.net), e.learn and "learn" or nil, true
   elseif k == "gap" then
-    return C("loss", e.from .. "-" .. e.to), C("loss", "no priced recipe"), "", "", C("dim", "?")
+    local s1 = e.suggest and e.suggest[1]
+    local text = s1 and ("no learned recipe: learn " .. s1.name .. (s1.fee > 0 and (" (" .. money(s1.fee) .. ")") or "")
+      .. (#e.suggest > 1 and (" +" .. (#e.suggest - 1)) or "")) or "no priced recipe"
+    return C("loss", e.from .. "-" .. e.to), C("loss", text), "", "", C("dim", "?")
   elseif k == "prep" then
     if e.mode == "make" then
       return nil, e.name .. (e.have > 0 and C("dim", (" (you have %d)"):format(e.have)) or ""),
         C("dim", ("~%d crafts"):format(e.crafts)), e.unit and (money(e.unit) .. C("dim", " each")) or "",
-        e.total and money(e.total) or C("dim", "?"), "make", false, true
+        e.total and money(e.total) or C("dim", "?"), "make", false, "down"
     end
-    return nil, e.name .. C("dim", (" (%d in your bags)"):format(e.have)), "", "", "", "have", false, true
+    return nil, e.name .. C("dim", (" (%d in your bags)"):format(e.have)), "", "", "", "have", false, "down"
   elseif k == "history" then
     return C("dim", e.from .. "-" .. e.to), C("dim", e.name), C("dim", e.crafts > 0 and ("%d crafts"):format(e.crafts) or ""),
       C("dim", date("%b %d", e.t)), e.cost > 0 and money(e.cost) or "", nil, false, false, true
@@ -213,7 +216,7 @@ local function fillSection(row, e)
   row.title:ClearAllPoints()
   row.title:SetPoint("LEFT", x, 0)
   row.title:SetWidth(pos.cost and (pos.cost.x - x - GAP) or 300)
-  row.title:SetText(e.title:upper() .. (hint and ("  " .. C("dim", hint)) or ""))
+  row.title:SetText(e.title:upper() .. (hint and ("  " .. C("dim", hint)) or "") .. (e.warn and ("  " .. C("loss", e.warn)) or ""))
   row.title:Show()
   if e.key == "stock" then
     place(row.cost, "cost"); row.cost:SetText(C("dim", "vendor ") .. money(e.vendorTotal))
@@ -238,9 +241,10 @@ local function fillRow(row, e)
   end
   local x = pos.icon.x
   if rail then
-    -- a short elbow from above into the row, then the content indented past it
+    -- a short elbow into the row, then the content indented past it. Prep rows sit above the craft they
+    -- feed, so theirs hangs down toward that craft; the rest hang from the row above.
     row.railV:ClearAllPoints()
-    row.railV:SetPoint("TOPLEFT", x + 6, 0)
+    row.railV:SetPoint(rail == "down" and "BOTTOMLEFT" or "TOPLEFT", x + 6, 0)
     row.railV:SetHeight(T.size.row / 2)
     row.railH:ClearAllPoints()
     row.railH:SetPoint("LEFT", x + 6, 0)

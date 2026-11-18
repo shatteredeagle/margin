@@ -181,10 +181,11 @@ function VM.RouteEntries(plan, o)
   stockEntries(list, o.stock or {}, o.showStock)
   historyEntries(list, o.history or {}, o.showHistory)
   list[#list + 1] = { kind = "section", key = "steps", title = "Steps", hint = "to " .. plan.target .. ", net",
+    warn = plan.stallAt and ("can't reach " .. plan.target .. ": stuck at " .. plan.stallAt) or nil,
     total = -plan.cost, signed = true }
   for _, seg in ipairs(plan.segs) do
     if seg.gap then
-      list[#list + 1] = { kind = "gap", from = seg.from, to = seg.to }
+      list[#list + 1] = { kind = "gap", from = seg.from, to = seg.to, suggest = seg.suggest }
     else
       local r = seg.row.r
       local n = math.ceil(seg.crafts)
