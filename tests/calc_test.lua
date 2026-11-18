@@ -376,4 +376,41 @@ fake.segs[2] = nil
 stock = ns.RouteStock(fake, true)
 assert(#stock == 1 and stock[1].item == 140 and stock[1].count == 7 and stock[1].vendor == 100 and stock[1].ah == 300)
 GetItemCount = nil
+
+-- craft planner: shopping list after what you hold, cost, revenue and profit for a run of crafts
+do
+  local qowned = { [1] = 4 }
+  ns.Owned = function(id) return qowned[id] or 0 end
+  ns.VendorSell = function(id) return id == 9 and 300 or nil end
+  ns.AHNetPerUnit = function(id) return id == 9 and 950 or nil end
+  MarginDB = { depth = {} }
+  local qr = { id = 600, name = "Q", out = 9, qty = 1, diff = 0, ups = 1, trivial = 400,
+    reagents = { {item = 1, count = 2}, {item = 2, count = 1} } }       -- item 1: 10c vendor; item 2: 50c AH
+  local q = ns.Quote(qr, 5, { Q = { recipes = { qr } } })
+  assert(q.units == 5 and q.crafts == 5)
+  local byItem = {}
+  for _, row in ipairs(q.shop) do byItem[row.item] = row end
+  assert(byItem[1].need == 10 and byItem[1].have == 4 and byItem[1].buy == 6, "holds 4 of the 10")
+  assert(byItem[2].need == 5 and byItem[2].buy == 5)
+  assert(q.cash == 6 * 10 + 5 * 50, q.cash)                          -- only what is still to buy
+  assert(q.fullCost == 10 * 10 + 5 * 50, q.fullCost)                 -- everything at market, held items included
+  assert(q.revenue.vendor == 1500 and q.revenue.ah == 4750)
+  assert(q.profit.vendor == 1500 - 350 and q.profit.ah == 4750 - 350)
+  assert(q.maxHeld == 0, "no item 2 held, so none can be made from stock alone")
+  qowned[2] = 7
+  assert(ns.Quote(qr, 1, { Q = { recipes = { qr } } }).maxHeld == 2, "4 of item 1 allow 2 crafts; item 2 is not the limit")
+  -- supply: only 3 of item 2 listed, 5 needed
+  ns.NoteDepth(2, { 50, 3 }, false)
+  qowned[2] = 0
+  local qs = ns.Quote(qr, 5, { Q = { recipes = { qr } } })
+  local flagged
+  for _, row in ipairs(qs.shop) do if row.item == 2 and row.short == 2 then flagged = true end end
+  assert(flagged and #qs.short == 1, "the shortage is reported")
+  -- an unpriced reagent: no profit figure
+  local qu = { id = 601, name = "U", out = 9, qty = 1, diff = 0, ups = 1, trivial = 400, reagents = { {item = 998, count = 1} } }
+  local qq = ns.Quote(qu, 2, { U = { recipes = { qu } } })
+  assert(qq.unpriced == 1 and qq.profit.vendor == nil)
+  ns.Owned = function() return 0 end
+  MarginDB = nil
+end
 print("calc ok")

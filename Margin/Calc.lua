@@ -576,3 +576,79 @@ function ns.RouteStock(plan, includeBank)
   table.sort(out, function(a, b) return worth(a) > worth(b) end)
   return out
 end
+
+-- What a run of `crafts` crafts of recipe r would involve: everything to buy (after what you hold),
+-- the intermediates to make first, what it costs, and what it earns. Used by the craft planner window.
+--   cash        what you still have to pay (the shopping list, listings walked cheapest first)
+--   fullCost    every reagent at market price, including what you already hold
+--   revenue     { vendor, ah } for the units made (the AH figure is after the cut and the deposit risk)
+--   profit      { vendor, ah } revenue minus fullCost (nil when a reagent has no price)
+function ns.Quote(r, crafts, profs)
+  profs = profs or ns.Char().profs
+  crafts = math.max(1, math.floor(crafts or 1))
+  local idx = craftIndex(profs)
+  local acc, prep, left = {}, { order = {}, byItem = {} }, {}
+  expand(r, crafts, idx, acc, prep, left)
+
+  local shop, cash, fullCost, unpriced, short = {}, 0, 0, 0, {}
+  for item, n in pairs(acc) do
+    n = math.ceil(n - 1e-9)
+    local unit, src = ns.BuyPrice(item)
+    local have = ns.Owned(item)
+    local buy = math.max(0, n - have)
+    local sup = (src == "ah" and ns.Supply) and ns.Supply(item) or nil
+    local cost = unit and unit * buy or nil
+    if src == "ah" and ns.WalkCost and buy > 0 then
+      local c = ns.WalkCost(item, math.min(buy, sup or buy))
+      if c then cost = c end
+    end
+    local market = unit and unit * n or nil
+    if src == "ah" and ns.WalkCost then
+      local c = ns.WalkCost(item, math.min(n, sup or n))
+      if c then market = c end
+    end
+    local shortBy = (sup and buy > sup) and (buy - sup) or 0
+    if shortBy > 0 then short[#short + 1] = item end
+    if unit then
+      cash = cash + (cost or 0)
+      fullCost = fullCost + (market or 0)
+    else
+      unpriced = unpriced + 1
+    end
+    shop[#shop + 1] = { item = item, need = n, have = have, buy = buy, unit = unit, src = src, cost = cost,
+      sup = sup, short = shortBy }
+  end
+  table.sort(shop, function(a, b)
+    if (a.buy > 0) ~= (b.buy > 0) then return a.buy > 0 end
+    return (a.cost or 0) > (b.cost or 0)
+  end)
+
+  local made = {}
+  for _, e in ipairs(prep.order) do
+    made[#made + 1] = { item = e.item, recipe = e.recipe, have = e.used, units = math.ceil(e.units - 1e-9),
+      crafts = math.ceil(e.units / e.recipe.qty - 1e-9), unit = ns.UnitPrice(e.item, idx) }
+  end
+
+  local units = crafts * (r.qty or 1)
+  local vendorEach = r.out and ns.VendorSell(r.out) or nil
+  local ahEach = r.out and ns.AHNetPerUnit and ns.AHNetPerUnit(r.out) or nil
+  local revenue = { vendor = vendorEach and vendorEach * units or nil, ah = ahEach and ahEach * units or nil }
+  local profit = {}
+  if unpriced == 0 then
+    profit.vendor = revenue.vendor and (revenue.vendor - fullCost) or nil
+    profit.ah = revenue.ah and (revenue.ah - fullCost) or nil
+  end
+
+  -- the most crafts the base materials you already hold allow
+  local one, perCraft = {}, {}
+  expand(r, 1, idx, one, nil, nil)
+  local most = math.huge
+  for item, per in pairs(one) do
+    if per > 0 then most = math.min(most, math.floor(ns.Owned(item) / per + 1e-9)) end
+  end
+  if most == math.huge then most = 0 end
+
+  return { crafts = crafts, units = units, shop = shop, made = made, cash = cash, fullCost = fullCost,
+    revenue = revenue, profit = profit, unpriced = unpriced, short = short, maxHeld = most,
+    perCraftCost = fullCost / crafts }
+end

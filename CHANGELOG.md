@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Craft planner.** Click a recipe on the Profit tab: choose how many to craft (type it, +/-, 5/10/25, or Max for what you hold) and see what to make first, what to buy (after what you hold, with AH shortages flagged), what you pay now, the full cost, what it sells for and the net profit at vendor and AH prices. A button opens the recipe in the profession window with that many.
+
 - Route tab: a "Crafted stock" row at the top shows what the route has made and you are holding, worth what at a vendor and on the AH (after the cut and the lost-deposit risk); click it for the items. It never includes anything a later step uses as a reagent.
 
 - The route no longer redraws on every craft: bag changes are batched over two seconds, ignored while no Margin window is open, and only redraw when the count of an item the route actually uses has changed.

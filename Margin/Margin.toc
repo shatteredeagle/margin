@@ -21,6 +21,7 @@ Scan.lua
 Calc.lua
 Progress.lua
 UI.lua
+Quote.lua
 Dump.lua
 FullScan.lua
 Shopping.lua
