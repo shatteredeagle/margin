@@ -368,12 +368,53 @@ end
 -- One pass of the planner: at each skill point the available recipe with the
 -- lowest expected cost per skill-up wins (points are independent, so greedy per
 -- point is optimal). `skip` is a set of rows that may not be used.
+-- A listing book ({ price, qty, price, qty, ... } cheapest first) with prefix sums, so the cost of the first n
+-- units is a binary search. Past the end of the book the last price carries on (what lies beyond is unknown).
+local function makeBook(p)
+  local units, cost = { 0 }, { 0 }
+  local last = 0
+  for i = 1, #p, 2 do
+    units[#units + 1] = units[#units] + p[i + 1]
+    cost[#cost + 1] = cost[#cost] + p[i] * p[i + 1]
+    last = p[i]
+  end
+  local book = { first = p[1] or 0 }
+  function book.costTo(n)
+    if n <= 0 then return 0 end
+    local lo, hi = 1, #units
+    if n >= units[hi] then return cost[hi] + (n - units[hi]) * last end
+    while hi - lo > 1 do
+      local mid = math.floor((lo + hi) / 2)
+      if units[mid] >= n then hi = mid else lo = mid end
+    end
+    -- units[lo] < n <= units[hi]: the rest comes from listing `lo`
+    return cost[lo] + (n - units[lo]) * p[(hi - 1) * 2 - 1]
+  end
+  return book
+end
+
 local function route(rows, base, start, target, skip, force, byId)
   local segs, cur = {}, nil
   local total, crafts, gross = 0, 0, 0
   -- What the AH can still supply of each item the route buys there (listed units plus what you hold).
   -- Skill points are spent in order, so when something runs out, later points use other recipes.
   local left, constrained = {}, {}
+  -- Units of each AH item the route has used so far. Buying them takes the cheapest listings first, so each
+  -- skill point costs the premium of the dearer listings it reaches over the lowest price; what you hold is
+  -- used before any is bought.
+  local used, heldOf = {}, {}
+  local function extraFor(row, ch)
+    if not row.walk then return 0 end
+    local extra = 0
+    for _, w in ipairs(row.walk) do
+      local held = heldOf[w.item]
+      if held == nil then held = ns.Owned(w.item); heldOf[w.item] = held end
+      local before = used[w.item] or 0
+      local b0, b1 = math.max(0, before - held), math.max(0, before + w.per / ch - held)
+      if b1 > b0 then extra = extra + (w.book.costTo(b1) - w.book.costTo(b0)) - (b1 - b0) * w.book.first end
+    end
+    return math.max(0, extra)
+  end
   local function supplyOf(item)
     local v = left[item]
     if v == nil then v = (ns.Supply and ns.Supply(item) or math.huge) + ns.Owned(item); left[item] = v end
@@ -387,35 +428,41 @@ local function route(rows, base, start, target, skip, force, byId)
     return true
   end
   for s = start, target - 1 do
-    local best, bestPer, bestCh
+    local best, bestPer, bestCh, bestExtra
     -- a locked route keeps its earlier pick for this skill point while it is still usable
     local pick = force and force[s] and byId[force[s]]
     if pick and pick.missing == 0 and not skip[pick] and not pick.unavailable then
       local ch = chanceAt(pick, base, s) * pick.r.ups
-      if ch > 0 and fits(pick, ch) then best, bestPer, bestCh = pick, math.max(pick.net, 0) / ch, ch end
+      if ch > 0 and fits(pick, ch) then
+        bestExtra = extraFor(pick, ch)
+        best, bestPer, bestCh = pick, math.max(pick.net, 0) / ch + bestExtra, ch
+      end
     end
     for _, row in ipairs(best and {} or rows) do
       if row.missing == 0 and not skip[row] and not row.unavailable then
         local ch = chanceAt(row, base, s) * row.r.ups
         if ch > 0 and fits(row, ch) then
-          local per = math.max(row.net, 0) / ch -- see rankPer in Evaluate
+          local extra = extraFor(row, ch)
+          local per = math.max(row.net, 0) / ch + extra -- see rankPer in Evaluate
           if not best or per < bestPer or (per == bestPer and ch > bestCh) then
-            best, bestPer, bestCh = row, per, ch
+            best, bestPer, bestCh, bestExtra = row, per, ch, extra
           end
         end
       end
     end
     if best then
+      local pointCost = best.net / bestCh + bestExtra
       if cur and cur.row == best then
-        cur.to = s + 1; cur.crafts = cur.crafts + 1 / bestCh; cur.cost = cur.cost + best.net / bestCh
+        cur.to = s + 1; cur.crafts = cur.crafts + 1 / bestCh; cur.cost = cur.cost + pointCost
       else
-        cur = { row = best, from = s, to = s + 1, crafts = 1 / bestCh, cost = best.net / bestCh }
+        cur = { row = best, from = s, to = s + 1, crafts = 1 / bestCh, cost = pointCost }
         segs[#segs + 1] = cur
       end
-      total = total + best.net / bestCh
-      gross = gross + best.cost / bestCh
+      total = total + pointCost
+      gross = gross + best.cost / bestCh + bestExtra
       crafts = crafts + 1 / bestCh
       for item, per in pairs(best.limits or {}) do left[item] = supplyOf(item) - per / bestCh end
+      for _, w in ipairs(best.walk or {}) do used[w.item] = (used[w.item] or 0) + w.per / bestCh end
     else
       if cur and cur.gap then
         cur.to = s + 1
@@ -440,16 +487,26 @@ function ns.Plan(prof, target, profs, useTrainer, force)
   local start = prof.skill
   local byId = {}
   for _, row in ipairs(rows) do if not byId[row.r.id] then byId[row.r.id] = row end end
-  -- per craft, how much of each AH-bought item a recipe uses (only items whose supply is known)
-  if ns.Supply and MarginDB and MarginDB.depth and next(MarginDB.depth) then
+  -- per craft, how much of each AH-bought item a recipe uses: `limits` for items whose total supply is known
+  -- (a cap), `walk` for items whose listings are known at all (the price rises as they are used)
+  if ns.Supply and ns.Depth and MarginDB and MarginDB.depth and next(MarginDB.depth) then
+    local books = {}
     for _, row in ipairs(rows) do
       local acc = {}
       expand(row.r, 1, idx, acc, nil, nil)
       for item, per in pairs(acc) do
         local _, src = ns.BuyPrice(item)
-        if src == "ah" and ns.Supply(item) then
-          row.limits = row.limits or {}
-          row.limits[item] = per
+        if src == "ah" then
+          if ns.Supply(item) then
+            row.limits = row.limits or {}
+            row.limits[item] = per
+          end
+          local d = ns.Depth(item)
+          if d and #d.p > 0 then
+            books[item] = books[item] or makeBook(d.p)
+            row.walk = row.walk or {}
+            row.walk[#row.walk + 1] = { item = item, per = per, book = books[item] }
+          end
         end
       end
     end

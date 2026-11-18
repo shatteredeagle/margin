@@ -438,4 +438,32 @@ do
   assert(q.flip and q.flip.vendor.crafts == 10, "the quote carries it")
   MarginDB = nil
 end
+
+-- price walking: a recipe that gets dearer as its ingredient is used up loses to a steadier one
+do
+  MarginDB = { depth = {} }
+  ns.Owned = function() return 0 end
+  prices[400] = { 100, "ah" }; prices[401] = { 200, "vendor" }
+  ns.NoteDepth(400, { 100, 10, 300, 100 }, false)               -- 10 units @1s, then 100 @3s
+  local Walky = { id = 800, out = 801, qty = 1, diff = 0, ups = 1, trivial = 400, reagents = { {item = 400, count = 1} } }   -- 100c at first
+  local Steady = { id = 802, out = 803, qty = 1, diff = 0, ups = 1, trivial = 400, reagents = { {item = 401, count = 1} } } -- 200c always
+  local pw = { skill = 10, max = 60, recipes = { Walky, Steady } }
+  resaleMode = "off"
+  local walked = ns.Plan(pw, 40, { pw }, false)                 -- 30 skill points
+  assert(#walked.segs == 2 and walked.segs[1].row.r == Walky and walked.segs[1].to == 20 and walked.segs[2].row.r == Steady,
+    "the first 10 units are cheapest; after that 300c loses to 200c: " .. tostring(walked.segs[1].to))
+  assert(walked.cost == 10 * 100 + 20 * 200, walked.cost)       -- no premium paid on the cheap listings
+  -- with only Walky available the premium is paid and counted
+  local pw2 = { skill = 10, max = 60, recipes = { Walky } }
+  local only = ns.Plan(pw2, 20, { pw2 }, false)                 -- 10 points: all 10 on the cheap listings
+  assert(only.cost == 1000, only.cost)
+  local only30 = ns.Plan(pw2, 40, { pw2 }, false)               -- 30 points: 10 @100, 20 @300
+  assert(only30.cost == 10 * 100 + 20 * 300 and only30.gross == only30.cost, only30.cost)
+  -- what you hold is used before any is bought: holding 10 means 10 more of the cheap ones are free
+  ns.Owned = function(id) return id == 400 and 10 or 0 end
+  local held = ns.Plan(pw2, 40, { pw2 }, false)                 -- 30 points: 10 held, then 10 @100, then 10 @300
+  assert(held.cost == 30 * 100 + 10 * 200, held.cost)           -- the premium is only paid on the last 10
+  ns.Owned = function() return 0 end
+  MarginDB = nil
+end
 print("calc ok")
