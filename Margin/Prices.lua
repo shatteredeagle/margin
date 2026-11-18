@@ -35,7 +35,7 @@ function ns.NoteAHPrice(itemID, copper)
   if type(copper) ~= "number" or copper <= 0 then return end
   MarginDB.prices = MarginDB.prices or {}
   MarginDB.prices[itemID] = { p = copper, t = time() }
-  if ns.InvalidatePlan then ns.InvalidatePlan() end
+  if ns.MarkStale then ns.MarkStale() end
 end
 
 -- Unit price a vendor you opened charged (gold-only, unlimited stock). Keeps the lowest

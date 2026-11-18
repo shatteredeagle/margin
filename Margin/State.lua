@@ -169,6 +169,17 @@ local planCache, cardCache, cardCount = {}, {}, 0
 function ns.InvalidatePlan(soft)
   wipe(planCache)
   if not soft then wipe(cardCache); cardCount = 0 end
+  ns.planStale = false
+end
+
+-- Things that happen on their own (prices arriving, a scan, bags, a skill-up) change what a fresh plan would be,
+-- but never replace the one you are looking at: that only happens when you ask (Re-plan, a setting, another
+-- profession, opening the window). Planning is the heaviest thing Margin does, and doing it behind your back
+-- stuttered the game. The plan is just marked as out of date.
+function ns.MarkStale()
+  if ns.planStale then return end
+  ns.planStale = true
+  if ns.OnStale then ns.OnStale() end -- a window may show it (only a label; nothing replans or redraws)
 end
 
 -- Forget the locked route for a profession; the next plan is a fresh one.
@@ -196,8 +207,8 @@ function ns.CurrentPlan()
   local lock = useLock and char.locks[name] or nil
   if lock and lock.key ~= lockKey then lock = nil; char.locks[name] = nil end
 
-  local key = table.concat({ name, prof.skill, prof.scanSkill or 0, prof.time or 0, lockKey,
-    lock and lock.t or "free", ns.Opt("noLock") and "n" or "l" }, "|")
+  -- (no skill or scan time in the key: a new scan or skill-up must not quietly replace the plan, see MarkStale)
+  local key = table.concat({ name, lockKey, lock and lock.t or "free", ns.Opt("noLock") and "n" or "l" }, "|")
   local cards = ns.Opt("noLock") and true or false
   local cache = cards and cardCache or planCache
   local hit = cache[key]

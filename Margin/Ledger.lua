@@ -352,7 +352,7 @@ local function buildTabs()
       ns.ClearLock(name)
       ns.RefreshUI()
     end,
-    tooltip = { "Re-plan the route", "The route stays as planned while prices change. Re-plan picks the cheapest recipes again from your skill now." } })
+    tooltip = { "Re-plan the route", "Nothing replans by itself: the route, its costs and the shopping list stay as planned while prices, scans, your bags and your skill change. Re-plan picks the cheapest recipes again from your skill and prices now. A * means something has changed since it was planned." } })
   win.replan:SetPoint("RIGHT", -8, 0)
   win.lockText = W.Text(win.tabs, "label", "dim", "RIGHT")
   win.lockText:SetPoint("RIGHT", win.replan, "LEFT", -10, 0)
@@ -660,6 +660,7 @@ redraw = function()
   win.tabs:SetSelected(tab.key)
   win.search:SetShown(tab.search and prof ~= nil)
   win.replan:SetShown(tab.replan and prof ~= nil)
+  win.replan:SetText(ns.planStale and "Re-plan *" or "Re-plan") -- * : prices, scans or your skill changed since this was planned
   win.lockText:SetShown(tab.replan and prof ~= nil)
   win.lockGlyph:SetShown(tab.replan and prof ~= nil)
   layoutChips(prof and tab or nil)
@@ -713,6 +714,11 @@ redraw = function()
   end
   win.list:SetEntries(list)
   if win.settings:IsShown() then syncSettings() end
+end
+
+-- the plan went out of date: only the Re-plan button's label changes
+ns.OnStale = function()
+  if win and win.replan then win.replan:SetText("Re-plan *") end
 end
 
 ns.Layouts.register("ledger", {

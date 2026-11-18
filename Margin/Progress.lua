@@ -59,7 +59,7 @@ function ns.RecordProgress(profName, from, to)
     if #h > KEEP then table.remove(h, 1) end
   end
   crafts = {}
-  if ns.InvalidatePlan then ns.InvalidatePlan() end
+  if ns.MarkStale then ns.MarkStale() end
 end
 
 -- Reads your current skills from the game and records any that went up.
@@ -160,62 +160,11 @@ end)
 --  * nothing is redrawn while no Margin window is open (the plan is just marked stale);
 --  * a redraw only happens when the count of an item the route actually uses has changed;
 --  * and changes are batched over two seconds.
-local lastSig
-local lastActivity, idleWaiting, idleFull, idleSince = 0, false, false, 0
--- Crafting touches your bags and skill every second or two, and planning the route takes a fraction of a second
--- (more on a big profession): doing it each time made the game stutter in a steady beat while you crafted. So
--- changes only note that something happened, and the route is refreshed once you have been quiet for a few
--- seconds (or 20 s have passed). full: a skill change, which the comparison cards need to plan again for.
-local function openWindow()
-  return ns.AnyWindowShown and ns.AnyWindowShown()
-end
-
-local function bagSignature()
-  local plan = ns.CurrentPlan()
-  if not plan then return "" end
-  local parts = {}
-  for _, it in ipairs(plan.shop) do parts[#parts + 1] = it.item .. ":" .. ns.Owned(it.item) end
-  for _, seg in ipairs(plan.segs) do
-    for _, p in ipairs(seg.prep or {}) do parts[#parts + 1] = p.item .. ":" .. ns.Owned(p.item) end
-    if not seg.gap and seg.row.r.out then parts[#parts + 1] = seg.row.r.out .. ":" .. ns.Owned(seg.row.r.out) end -- the stock display
-  end
-  return table.concat(parts, ",")
-end
-
-local function runIdleRefresh()
-  idleWaiting = false
-  local full = idleFull
-  idleFull = false
-  if not openWindow() then
-    if ns.InvalidatePlan then ns.InvalidatePlan() end -- recomputed when a window is next opened
-    lastSig = nil
-    return
-  end
-  if not full then
-    local sig = bagSignature()
-    if sig == lastSig then return end -- nothing the route uses has changed
-    lastSig = sig
-  end
-  if ns.RefreshUI then ns.RefreshUI(not full) end -- soft: the comparison cards keep their plans
-end
-
-local function idleTick()
-  if GetTime() - lastActivity < 3 and GetTime() - idleSince < 20 then
-    return C_Timer.After(1, idleTick) -- still crafting: wait
-  end
-  runIdleRefresh()
-end
-
-function ns.NoteActivity() lastActivity = GetTime() end
-
-function ns.RefreshWhenIdle(full)
-  lastActivity = GetTime()
-  idleFull = idleFull or full or false
-  if idleWaiting then return end
-  idleWaiting, idleSince = true, GetTime()
-  C_Timer.After(1, idleTick)
-end
+-- Bag changes and skill-ups do not replan or redraw anything (see ns.MarkStale): the plan you are looking at stays
+-- as it is until you ask. (Shopping lists and the vendor and AH windows read your bags live when they draw.)
+function ns.NoteActivity() end
+function ns.RefreshWhenIdle() ns.MarkStale() end
 
 local bagFrame = CreateFrame("Frame")
 bagFrame:RegisterEvent("BAG_UPDATE_DELAYED")
-bagFrame:SetScript("OnEvent", function() ns.RefreshWhenIdle(false) end)
+bagFrame:SetScript("OnEvent", function() ns.MarkStale() end)

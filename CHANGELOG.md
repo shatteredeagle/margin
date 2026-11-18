@@ -4,7 +4,7 @@
 
 - **Fixed: Margin thought you held items you had used.** An AH purchase counts as yours while it is still in the mail, and that was worked out as "the bags should reach the count you had plus what you bought". Use some of the items first (crafting) and the bags stayed under that number, so the difference stayed counted as on the way for up to a week. A purchase now counts only until the bag count rises by what arrived; using items never adds to it. Old purchase records are dropped once.
 
-- **No more stutter while crafting.** Every craft changes your bags (and now and then your skill), and each change re-planned the route and redrew the window every couple of seconds. Margin now waits until you have stopped crafting for about 3 seconds (20 at the most) and refreshes once. The profession rescan keeps at least 20 seconds between reads and does one catch-up read afterwards, and the craft planner's own bag refresh is spaced out.
+- **Nothing replans by itself any more.** The route, its costs and the shopping list stay exactly as planned until you ask: press Re-plan, change a setting or the profession, ignore a craft, or open the window. New prices, scans, bag changes, skill-ups and AH lookups only mark the plan as out of date (the Re-plan button shows a *). Planning is the heaviest thing Margin does, and doing it behind your back made the game stutter in a steady beat while crafting. (Shopping lists and the vendor and AH windows still read your bags live when they draw.) The profession rescan keeps at least 20 seconds between reads.
 
 - The shopping list's step button is now a dropdown: Whole route, Next step, any single step, or the craft plan's list (from the Profit tab's craft planner). It has its own row in the shopping list header.
 

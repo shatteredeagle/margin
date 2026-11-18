@@ -143,8 +143,8 @@ local function nextScan()
   local item = table.remove(scanQ, 1)
   if not item then
     ns.Print("AH search round finished.")
-    if ns.InvalidatePlan then ns.InvalidatePlan() end
-    if ns.RefreshUI then ns.RefreshUI() end
+    if ns.MarkStale then ns.MarkStale() end
+    if ns.RedrawUI then ns.RedrawUI() end
     local done = scanDone
     scanDone = nil
     if done then done() end

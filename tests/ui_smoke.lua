@@ -768,31 +768,30 @@ do
   assert(ns.Transit(item) == 0 and MarginDB.credits[item] == nil, "old records are dropped")
   flush(30)
 end
--- while you keep crafting nothing refreshes; once you stop it refreshes once
+-- Nothing replans by itself: bags, skill-ups, prices, scans and name loads leave the plan alone and only mark it
+-- out of date; Re-plan (a click) replans.
 do
-  local realRefresh, calls = ns.RefreshUI, 0
-  ns.RefreshUI = function(...) calls = calls + 1; return realRefresh(...) end
+  ns.RefreshUI(); ns.RefreshUI()
+  local n, wipes = 0, 0
+  local realRefresh = ns.RefreshUI
+  ns.Plan = function(...) n = n + 1; return realPlan(...) end
+  local before = ns.CurrentPlan()
   for i = 1, 8 do
     bags[4234] = (bags[4234] or 0) + 1
     fire("BAG_UPDATE_DELAYED")
-    flush(1) -- a craft every second or so
+    flush(1)
   end
-  assert(calls == 0, "no refresh while crafting (" .. calls .. ")")
-  flush(10)
-  assert(calls == 1, "one refresh once crafting stopped (" .. calls .. ")")
-  ns.RefreshUI = realRefresh
-end
--- a bag change replans the route you follow, never the comparison cards (planning them all again every couple of
--- seconds while crafting was the FPS sawtooth)
-do
-  ns.RefreshUI(); ns.RefreshUI() -- plans and the card plans cached
-  local n = 0
-  ns.Plan = function(...) n = n + 1; return realPlan(...) end
-  bags[4234] = (bags[4234] or 0) + 25
-  fire("BAG_UPDATE_DELAYED")
-  flush(5)
+  fire("SKILL_LINES_CHANGED")
+  ns.NoteAHPrice(4234, 777)
+  ns.NoteDepth(4234, { 300, 5 }, false)
+  flush(30)
+  assert(ns.CurrentPlan() == before, "the plan is the same object: nothing replanned it")
+  assert(n == 0, "nothing planned by itself (" .. n .. " plans)")
+  assert(ns.planStale, "but it is marked out of date")
+  assert(win.replan.label:GetText() == "Re-plan *" or win.replan:GetText() == "Re-plan *", "the Re-plan button says so")
+  click(win.replan)
+  assert(n >= 1 and not ns.planStale, "Re-plan plans again (" .. n .. ")")
   ns.Plan = realPlan
-  assert(n >= 1 and n <= 2, "bag change replanned the route (and at most its lock): " .. n .. " plans")
 end
 
 ---------------------------------------------------------------------------

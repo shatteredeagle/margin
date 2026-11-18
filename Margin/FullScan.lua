@@ -66,8 +66,8 @@ local function finish(by, watch, total)
   progress = 1
   ns.Print(("Full scan done: %d auctions seen, %d of the %d items Margin watches are for sale."):format(
     total, priced, (function() local n = 0 for _ in pairs(watch) do n = n + 1 end return n end)()))
-  if ns.InvalidatePlan then ns.InvalidatePlan() end
-  if ns.RefreshUI then ns.RefreshUI() end
+  if ns.MarkStale then ns.MarkStale() end
+  if ns.RedrawUI then ns.RedrawUI() end
 end
 
 -- Walk the replicate list in slices, a few hundred auctions per frame, so the game does not freeze.

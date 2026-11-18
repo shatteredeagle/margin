@@ -12,7 +12,7 @@ function ns.NoteDepth(itemID, flat, capped)
   if not MarginDB then return end
   MarginDB.depth = MarginDB.depth or {}
   MarginDB.depth[itemID] = { t = time(), p = flat, capped = capped or nil }
-  if ns.InvalidatePlan then ns.InvalidatePlan() end
+  if ns.MarkStale then ns.MarkStale() end
 end
 
 function ns.Depth(itemID)

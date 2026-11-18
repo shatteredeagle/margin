@@ -182,7 +182,10 @@ local function scanNow(verbose)
     ns.RecordProgress(base.professionName, oldSkill, base.skillLevel)
   end
   ns.needRescan = missingTips > 0 -- recipe item tooltips were not loaded yet; try again when they arrive
-  if ns.RefreshUI then ns.RefreshUI() end
+  -- a scan on its own never replans: the plan only notes that it is out of date. (A profession with no plan yet is
+  -- planned when it is first drawn.)
+  if ns.MarkStale then ns.MarkStale() end
+  if ns.RedrawUI then ns.RedrawUI() end
 end
 
 local pending

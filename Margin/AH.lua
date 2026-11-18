@@ -364,6 +364,6 @@ local A = Auctionator and Auctionator.API and Auctionator.API.v1
 if A and A.RegisterForDBUpdate then
   pcall(A.RegisterForDBUpdate, "Margin", function()
     updateText()
-    if ns.RefreshUI then ns.RefreshUI() end
+    if ns.MarkStale then ns.MarkStale() end
   end)
 end
