@@ -6,7 +6,7 @@ local _, ns = ...
 -- can be clicked overlaps and the button stays on screen. It re-checks every time the
 -- window opens, since other addons build their parts late.
 
-local button
+local button, hooked, ensure
 
 local function book() return ProfessionsFrame or TradeSkillFrame end
 
@@ -92,13 +92,22 @@ local function place()
       if clear then chosen = c; break end
     end
   end
-  chosen = chosen or candidates[#candidates > 1 and 2 or 1] -- nothing free: above the top-right corner
+  if not chosen then
+    -- nothing is free: take the first place that is at least on screen (it may cover something small), and if
+    -- even those are off the screen (a window dragged to an edge), sit inside the window's title bar. A button
+    -- nobody can see is worse than one in a slightly awkward spot.
+    for _, c in ipairs(candidates) do
+      local r = candidateRect(c[1], c[2], c[3], c[4], c[5], w, h)
+      if r and r[1] >= 0 and r[2] >= 0 and r[3] <= sw and r[4] <= sh then chosen = c; break end
+    end
+    chosen = chosen or { "TOPRIGHT", parent, "TOPRIGHT", -48, -4 }
+  end
   button:ClearAllPoints()
   button:SetPoint(chosen[1], chosen[2], chosen[3], chosen[4], chosen[5])
   if MarginDB and MarginDB.debug then ns.Print("[btn] placed at", chosen[1], chosen[3], #blockers, "obstacles") end
 end
 
-local function ensure()
+function ensure()
   local parent = book()
   if not parent then return end
   if not button then
@@ -112,6 +121,12 @@ local function ensure()
   end
   button:SetParent(parent)
   button:SetFrameLevel(parent:GetFrameLevel() + 20)
+  if not hooked then
+    -- the profession window is built the first time it opens, and addons rebuild or hide parts of it: also look
+    -- again whenever it is shown, whichever event announced it
+    hooked = true
+    pcall(parent.HookScript, parent, "OnShow", function() C_Timer.After(0.1, ensure) end)
+  end
   -- visible at a sensible default first, so a problem while looking for a better spot cannot hide it
   button:ClearAllPoints()
   button:SetPoint("BOTTOMRIGHT", parent, "TOPRIGHT", -6, 1)
@@ -130,4 +145,22 @@ f:RegisterEvent("TRADE_SKILL_SHOW")
 f:SetScript("OnEvent", function() C_Timer.After(0.1, ensure) end)
 if EventRegistry and EventRegistry.RegisterCallback then
   EventRegistry:RegisterCallback("ProfessionsFrame.Show", function() C_Timer.After(0.1, ensure) end, f)
+end
+
+-- /margin button: why is the button not showing? (for a game where it does not)
+function ns.ButtonReport()
+  local parent = book()
+  ns.Print("profession window:", parent and (parent:GetName() or "unnamed") or "none found (ProfessionsFrame and TradeSkillFrame are both nil)")
+  if parent then ns.Print("  shown:", tostring(parent:IsShown()), " scale:", ("%.2f"):format(parent:GetEffectiveScale())) end
+  if not button then
+    ns.Print("button: not created yet (open a profession window first)")
+  else
+    local r = rectOf(button)
+    ns.Print("button: shown", tostring(button:IsShown()), "visible", tostring(button:IsVisible()), "alpha", ("%.1f"):format(button:GetAlpha()),
+      r and ("at %.0f,%.0f"):format(r[1], r[2]) or "no position", "screen", ("%.0fx%.0f"):format(UIParent:GetWidth(), UIParent:GetHeight()))
+  end
+  if parent then
+    ensure()
+    ns.Print("(placed it again just now)")
+  end
 end

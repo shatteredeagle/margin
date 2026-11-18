@@ -882,6 +882,8 @@ assert(MarginProfessionButton and MarginProfessionButton:IsShown(), "Margin butt
 hover(MarginProfessionButton)
 win:Hide()
 click(MarginProfessionButton)
+SlashCmdList.MARGIN("button") -- the diagnostic runs and places the button again
+assert(MarginProfessionButton:IsShown())
 assert(win:IsShown(), "the profession button opens the window")
 
 -- events the addon listens to, fired once each with the windows open

@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **The Margin button on the profession window is harder to lose.** If nothing was free it went above the window's top-right corner, which is off screen when the window sits at the top of the screen; it now picks the first place that is on screen, and failing that sits inside the title bar. It also looks again whenever the profession window is shown, whatever event announced it. `/margin button` reports what it found (the window, the button, where it is) and places it again.
+
 ## 0.2.1-alpha
 
 - **Fixed: Margin thought you held items you had used.** An AH purchase counts as yours while it is still in the mail, and that was worked out as "the bags should reach the count you had plus what you bought". Use some of the items first (crafting) and the bags stayed under that number, so the difference stayed counted as on the way for up to a week. A purchase now counts only until the bag count rises by what arrived; using items never adds to it. Old purchase records are dropped once.

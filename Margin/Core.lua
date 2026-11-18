@@ -135,6 +135,8 @@ SlashCmdList.MARGIN = function(msg)
       end
     end
     ns.Print("no ignored craft matches " .. want)
+  elseif msg == "button" then
+    if ns.ButtonReport then ns.ButtonReport() end
   elseif msg == "perf" then
     ns.PerfReport()
   elseif msg == "perf reset" then
