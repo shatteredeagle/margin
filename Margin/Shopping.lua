@@ -27,19 +27,38 @@ local function owned(item)
   return f(item, true) or 0 -- bags and bank
 end
 
--- Purchases the AH has confirmed but that have not reached the bags yet (the modern AH
--- delivers by mail). MarginDB.credits[item] = { base = bag count when bought, units, t }.
--- Counted as owned until the bags catch up, so a bought item is ticked off at once.
+-- Purchases the AH has confirmed but that have not reached the bags yet (the modern AH delivers by mail).
+-- MarginDB.credits[item] = { units = still to arrive, last = bag count when last looked, t }. Counted as owned
+-- until they arrive, so a bought item is ticked off at once. Only a rise in the bag count means something
+-- arrived: using items (crafting) lowers it and must never look like a delivery still on the way, which is what
+-- comparing against "the count the bags should reach" did (use some of the leather before the credit cleared and
+-- the difference counted as owned for up to a week).
 local WEEK = 7 * 86400
-function ns.Transit(item)
-  local c = MarginDB.credits and MarginDB.credits[item]
-  if not c then return 0 end
+
+local function reconcile(item, c)
   local have = owned(item)
-  if have >= c.base + c.units or time() - c.t > WEEK then
+  if c.base then -- an older credit: it cannot be told what was used since, so drop it
     MarginDB.credits[item] = nil
     return 0
   end
-  return c.base + c.units - have
+  if c.last and have > c.last then c.units = c.units - (have - c.last) end
+  c.last = have
+  if c.units <= 0 or time() - c.t > WEEK then
+    MarginDB.credits[item] = nil
+    return 0
+  end
+  return c.units
+end
+
+function ns.Transit(item)
+  local c = MarginDB.credits and MarginDB.credits[item]
+  if not c then return 0 end
+  return reconcile(item, c)
+end
+
+-- Look at every credit (bags changed): deliveries are noticed when they happen, not when something next asks.
+local function reconcileAll()
+  for item, c in pairs(MarginDB.credits or {}) do reconcile(item, c) end
 end
 
 local function credit(item, units)
@@ -49,7 +68,7 @@ local function credit(item, units)
     c.units = c.units + units
     c.t = time()
   else
-    MarginDB.credits[item] = { base = owned(item), units = units, t = time() }
+    MarginDB.credits[item] = { units = units, last = owned(item), t = time() }
   end
 end
 
@@ -385,6 +404,7 @@ for _, e in ipairs({ "AUCTION_HOUSE_SHOW", "AUCTION_HOUSE_CLOSED", "COMMODITY_SE
   ev:RegisterEvent(e)
 end
 ev:SetScript("OnEvent", function(_, event, a)
+  if event == "BAG_UPDATE_DELAYED" then reconcileAll() end
   if event == "AUCTION_HOUSE_SHOW" then
     C_Timer.After(0.3, showAtAH)
   elseif event == "AUCTION_HOUSE_THROTTLED_SYSTEM_READY" then

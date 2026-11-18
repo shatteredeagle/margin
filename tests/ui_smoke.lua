@@ -749,6 +749,25 @@ flush()
 assert(win.list.entries ~= oldEntries, "the names redraw happened")
 assert(plans == 0 and invalidations == 0, ("GET_ITEM_INFO_RECEIVED re-planned (%d plans, %d invalidations)"):format(plans, invalidations))
 ns.Plan, ns.InvalidatePlan = realPlan, realInvalidate
+-- a purchase still in the mail counts as owned only until the bag count rises by what arrived; using items
+-- (crafting) never turns into "still on the way"
+do
+  local item = 4234
+  MarginDB.credits = { [item] = { units = 50, last = bags[item], t = time() } }
+  assert(ns.Transit(item) == 50)
+  bags[item] = bags[item] - 20 -- crafted with some of what was already held
+  assert(ns.Transit(item) == 50, "using items does not add to what is on the way")
+  bags[item] = bags[item] + 30 -- 30 of the purchase arrived
+  fire("BAG_UPDATE_DELAYED")
+  assert(ns.Transit(item) == 20, "30 of 50 arrived: " .. ns.Transit(item))
+  bags[item] = bags[item] - 40 -- used more
+  assert(ns.Transit(item) == 20)
+  bags[item] = bags[item] + 20
+  assert(ns.Transit(item) == 0 and MarginDB.credits[item] == nil, "all arrived")
+  MarginDB.credits = { [item] = { base = 10, units = 5, t = time() } } -- the older record format
+  assert(ns.Transit(item) == 0 and MarginDB.credits[item] == nil, "old records are dropped")
+  flush(30)
+end
 -- while you keep crafting nothing refreshes; once you stop it refreshes once
 do
   local realRefresh, calls = ns.RefreshUI, 0
