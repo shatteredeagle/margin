@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Items an older lookup had marked "searched" (and so hidden from the AH button for 12 hours) are asked for again straight away after this update.
+
 ## 0.1.7-alpha
 - **The route now prices ingredients by walking the AH listings.** As the route uses up an item, later skill points reach dearer listings, so each step costs more than the lowest price suggests and a recipe that gets expensive can lose to a steadier one. What you hold is used before any is bought. It needs listing data (Full scan); items whose listings are unknown stay at the lowest price.
 - The AH lookup names the items it found no listing for after each round, and asks for them again after about 2 hours (was 12), so an item a search missed is not skipped for half a day. Items a Full scan or search showed to have nothing for sale are left out of the "to look up" count.

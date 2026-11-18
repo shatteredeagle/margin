@@ -55,6 +55,12 @@ f:RegisterEvent("ADDON_LOADED")
 f:SetScript("OnEvent", function(_, _, name)
   if name ~= "Margin" then return end
   MarginDB = MarginDB or {}
+  -- Lookups made before the 2-hour retry rule were remembered for 12 hours whether or not they found anything,
+  -- which hid unpriced items from the AH button: age those entries once so they are asked for again.
+  if not MarginDB.searchedFix then
+    for id, t in pairs(MarginDB.searched or {}) do MarginDB.searched[id] = t - 10 * 3600 end
+    MarginDB.searchedFix = true
+  end
   f:UnregisterEvent("ADDON_LOADED")
 end)
 
